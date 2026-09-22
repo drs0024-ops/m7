@@ -1,0 +1,23 @@
+{
+    "name": "UI",
+    "rootNamespace": "Game.UI",
+    "references": [
+        "Core",
+        "Gameplay",
+        "UnityEngine.UI",
+        "MessagePipe",
+        "VContainer",
+        "UniTask",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro",
+        "LeanTween"
+    ],
+    "autoReferenced": true,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "LeanTween.dll"
+    ],
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}   

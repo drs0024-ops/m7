@@ -1,0 +1,21 @@
+{
+    "name": "Bootstrap",
+    "rootNamespace": "Game.Bootstrap",
+    "references": [
+        "Core",
+        "Gameplay",
+        "UI",
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "VContainer",
+        "UniTask",
+        "LeanTween",
+        "UnityEngine.UI",
+        "UnityEngine.Audio",
+        "UnityEngine.SceneManagement",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro"
+    ],
+    "autoReferenced": true,
+    "overrideReferences": true
+}   

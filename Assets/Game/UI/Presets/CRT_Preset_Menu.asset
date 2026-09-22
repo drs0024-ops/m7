@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e117a7830928f4a128dbf469e7c13bc4, type: 3}
+  m_Name: CRT_Preset_Menu
+  m_EditorClassIdentifier: Assembly-CSharp::Game.UI.CRTShaderPreset
+  failureAmount: 0.5
+  transitionOpacity: 1
+  phosphorColor: {r: 0.7882353, g: 0.8980392, b: 1, a: 1}
+  tearColor: {r: 0.7882353, g: 0.8980392, b: 1, a: 1}
+  tearSpeed: 0.4
+  tearPauseMin: 10
+  tearPauseMax: 20
+  tearDirection: 0
+  tearOpacity: 0.229
+  tearFontSize: 128
+  tearLeadingOpacity: 1
+  tearTrailingOpacity: 0
+  retraceSpeed: 0.05
+  retraceSpeed2: 0.03
+  retraceHeight: 0.001
+  retraceOpacity: 0.023
+  retraceIntensity: 0.153
+  retraceDirection: 1
+  rollBarIdleIntensity: 0
+  rollBarTransitionIntensity: 1
+  transitionDuration: 0.066

@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07ea0c6820b0a404d970e0ffad288252, type: 3}
+  m_Name: gameData
+  m_EditorClassIdentifier: Assembly-CSharp::GameDataSO
+  currentHealth: 100
+  maxHealth: 100
+  onHealthChanged: {fileID: 11400000, guid: 584fd192c0a7d41a896c8fb0eac60a30, type: 2}
+  coins: 0
+  onCoinsChanged: {fileID: 11400000, guid: bbfb0257d3718463f82d8f59a4ee7d31, type: 2}
+  currentStamina: 100
+  maxStamina: 100
+  onStaminaChanged: {fileID: 11400000, guid: 3bc9c5c8e09bd41f699c9d005c013aa0, type: 2}
+  levelTime: 0
+  onTimerUpdated: {fileID: 11400000, guid: 5ddb1881b54fe4f75946e65b80ab5d1f, type: 2}
+  totalKeys: 5
+  collectedKeys: 0
+  onObjectiveChanged: {fileID: 11400000, guid: ffd20dd669df648d7ad77e7b86f8035e, type: 2}
+  onGameEnded: {fileID: 0}

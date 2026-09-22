@@ -1,0 +1,94 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 3
+  tags:
+  - NoBumpObject
+  - FloatingPlatform
+  - PlayerCollider
+  - Player2
+  - StartSpawn
+  - SceneSwapManager
+  - CameraBoundaries
+  - PLAYERPERSISTOBJECTS
+  - Invisability
+  - PlayerSprite
+  - Destructible
+  - Enemy
+  - Grid
+  - Checkpoint
+  - GameEventManager
+  - EditorCam
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - Ground
+  - Water
+  - UI
+  - Background
+  - PlayerLayer
+  - Lights
+  - Attackable
+  - Door
+  - Enemy
+  - EnemyNonCollider
+  - TriggerPlayer
+  - OneWayPlatform
+  - Walls
+  - Pickups
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: Background
+    uniqueID: 183888159
+    locked: 0
+  - name: Midground
+    uniqueID: 656606415
+    locked: 0
+  - name: Grid
+    uniqueID: 1415274115
+    locked: 0
+  - name: Platform
+    uniqueID: 176257835
+    locked: 0
+  - name: Decorations
+    uniqueID: 1981663421
+    locked: 0
+  - name: Player
+    uniqueID: 3554504121
+    locked: 0
+  - name: Enemy
+    uniqueID: 581517441
+    locked: 0
+  - name: Grass
+    uniqueID: 2071583575
+    locked: 0
+  - name: Destructible
+    uniqueID: 2253039521
+    locked: 0
+  - name: Forground
+    uniqueID: 3101580271
+    locked: 0
+  - name: EnemyNonCollider
+    uniqueID: 2946865551
+    locked: 0
+  m_RenderingLayers:
+  - Default

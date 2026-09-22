@@ -27,7 +27,7 @@ public class FixFontRenderQueue
 					count++;
 				}
 			}
-		}
+		} 
 
 		AssetDatabase.SaveAssets();
 		Debug.Log($"Done. Fixed {count} materials.");

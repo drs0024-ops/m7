@@ -1,0 +1,675 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Alfish.Unity.KRaster.Editor</name>
+    </assembly>
+    <members>
+        <member name="T:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptorDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptor"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptorDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptorDrawer.DrawMultiPropertyField(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent,UnityEditor.SerializedProperty)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.WrapModeTextureDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.WrapModeTexture"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.WrapModeTextureDrawer.DrawMultiPropertyField(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent,UnityEditor.SerializedProperty)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.OptionalColorDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.OptionalColor"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.OptionalColorDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.OptionalColorDrawer.DrawMultiPropertyField(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent,UnityEditor.SerializedProperty)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.ImageScaleDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.ImageScale"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.ImageScaleDrawer.DrawMultiPropertyField(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent,UnityEditor.SerializedProperty)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.RectOffsetAttributeDrawer">
+            <summary>Draws GUI to edit fields marked with <see cref="T:Alfish.Unity.KRaster.Editor.RectOffsetAttribute"/>.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectOffsetAttributeDrawer.DrawMultiPropertyField(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent,UnityEditor.SerializedProperty)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.RectPointAttributeDrawer">
+            <summary>Draws GUI to edit fields marked with <see cref="T:Alfish.Unity.KRaster.Editor.RectPointAttribute"/>.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectPointAttributeDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectPointAttributeDrawer.OnGUI(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.KRasterImporterEditor">
+            <summary>Editor for the <see cref="T:Alfish.Unity.KRaster.Editor.KRasterImporter"/> parameters.</summary>
+        </member>
+        <member name="P:Alfish.Unity.KRaster.Editor.KRasterImporterEditor.showImportedObject">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.KRasterImporterEditor.OnInspectorGUI">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer">
+            <summary>Base class for a custom property drawer which shows subfields in the same line.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.standardHorizontalSpacing">
+            <summary>The width used by default for horizontal spacing between controls.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.checkboxSize">
+            <summary>The width and height of a checkbox.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.GetPropertyHeight">
+            <summary>How tall the GUI for the field is in pixels.</summary>
+            <returns>The height in pixels.</returns>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.OnGUI(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.DrawMultiPropertyField(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent,UnityEditor.SerializedProperty)">
+            <summary>Implement this method to draw the subfields of the property.</summary>
+            <param name="position">Rectangle on the screen to use for the multi-property field.</param>
+            <param name="property">The SerializedProperty to use for the control.</param>
+            <param name="label">Label to use. Use GUIContent.none to not display a label at all.</param>
+            <param name="valuesIterator">The SerializedProperty of the first property to make a control for.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MultiPropertyDrawer.MultiPropertyField(UnityEngine.Rect,UnityEngine.GUIContent[],UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <summary>Makes a multi-control with several property fields in the same line.
+             All the horizontal space is used, even when there's only 2 subfields.</summary>
+            <param name="position">Rectangle on the screen to use for the multi-property field.</param>
+            <param name="subLabels">Array with small labels to show in front of each subfield.</param>
+            <param name="valuesIterator">The SerializedProperty of the first property to make a control for.</param>
+            <param name="label">Label to use. Use GUIContent.none to not display a label at all.</param>
+            <exception cref="T:System.ArgumentNullException"/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.RectSlicingDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.RectSlicing"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectSlicingDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectSlicingDrawer.OnGUI(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SourceImageEditor">
+            <summary>Editor for the imported <see cref="T:Alfish.Unity.KRaster.Editor.SourceImage"/>. It displays an image preview with meta-info.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SourceImageEditor.OnInspectorGUI">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SourceImageEditor.RenderStaticPreview(System.String,UnityEngine.Object[],System.Int32,System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SourceImageEditor.HasPreviewGUI">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SourceImageEditor.OnPreviewGUI(UnityEngine.Rect,UnityEngine.GUIStyle)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SourceImageEditor.GetInfoString">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SpriteImportationDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.SpriteImportation"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SpriteImportationDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.SpriteImportationDrawer.OnGUI(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureImportationDrawer">
+            <summary>Draws GUI to edit <see cref="T:Alfish.Unity.KRaster.Editor.TextureImportation"/> fields.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.TextureImportationDrawer.GetPropertyHeight(UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.TextureImportationDrawer.OnGUI(UnityEngine.Rect,UnityEditor.SerializedProperty,UnityEngine.GUIContent)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.ImageFileGenerator">
+            <summary>Whether it should generate a static image file or one image file per frame.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageFileGenerator.None">
+            <summary>Don't generate any separate files.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageFileGenerator.Image">
+            <summary>Generate a separate image file for the texture importer.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageFileGenerator.Animation">
+            <summary>Generate frames from an animation using the external exporter.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.ImageGenerationMode">
+            <summary>Mode to use for generating images.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageGenerationMode.Automatic">
+            <summary>Automatically pick the appropriate mode.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageGenerationMode.ForceExternal">
+            <summary>Image generation can only use the external converter or fail.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageGenerationMode.ForceInternal">
+            <summary>The image can only be generated from the internal PNG data, without calling external programs.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptor">
+            <summary>Determines whether a texture uses a mipmap limit, and which mipmap limit the texture uses.</summary>
+            <param name="useMipmapLimit">Enable or disable mipmap limit effects for a Texture.</param>
+            <param name="groupName">The TextureMipmapLimitGroup to use the mipmap limit of.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptor.#ctor(System.Boolean,System.String)">
+            <summary>Determines whether a texture uses a mipmap limit, and which mipmap limit the texture uses.</summary>
+            <param name="useMipmapLimit">Enable or disable mipmap limit effects for a Texture.</param>
+            <param name="groupName">The TextureMipmapLimitGroup to use the mipmap limit of.</param>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptor.useMipmapLimit">
+            <summary>Enables or disables the texture using a mipmap limit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.MipmapLimitDescriptor.groupName">
+            <summary>The TextureMipmapLimitGroup to use the mipmap limit of.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.WrapModeAxis">
+            <summary>Wrap mode for a texture axis.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeAxis.Repeat">
+            <summary>Tiles the texture, creating a repeating pattern.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeAxis.Clamp">
+            <summary>Clamps the texture to the last pixel at the edge.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeAxis.Mirror">
+            <summary>Tiles the texture, creating a repeating pattern by mirroring it at every integer boundary.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeAxis.OnceMirror">
+            <summary>Mirrors the texture once, then clamps to edge pixels.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.WrapModeTexture">
+            <summary>Wrap mode for all axes of a texture.</summary>
+            <param name="u">Texture U coordinate wrapping mode.</param>
+            <param name="v">Texture V coordinate wrapping mode.</param>
+            <param name="w">Texture W coordinate wrapping mode for Texture3D.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.WrapModeTexture.#ctor(Alfish.Unity.KRaster.Editor.WrapModeAxis,Alfish.Unity.KRaster.Editor.WrapModeAxis,Alfish.Unity.KRaster.Editor.WrapModeAxis)">
+            <summary>Wrap mode for all axes of a texture.</summary>
+            <param name="u">Texture U coordinate wrapping mode.</param>
+            <param name="v">Texture V coordinate wrapping mode.</param>
+            <param name="w">Texture W coordinate wrapping mode for Texture3D.</param>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.u">
+            <summary>Texture U coordinate wrapping mode.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.v">
+            <summary>Texture V coordinate wrapping mode.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.w">
+            <summary>Texture W coordinate wrapping mode for Texture3D.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.WrapModeTexture.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.Repeat">
+            <summary>Tiles the texture, creating a repeating pattern.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.Clamp">
+            <summary>Clamps the texture to the last pixel at the edge.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.Mirror">
+            <summary>Tiles the texture, creating a repeating pattern by mirroring it at every integer boundary.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.WrapModeTexture.OnceMirror">
+            <summary>Mirrors the texture once, then clamps to edge pixels.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureResamplingFilter">
+            <summary>Algorithm used to resample a texture, like when it is resized.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.Point">
+            <summary>Only uses original colors, without blending. Very fast, but can cause all sorts of artifacts.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.Box">
+            <summary>Merges points within the target box area equally, for fully blocky pixelated jaggies.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.Bilinear">
+            <summary>Linearly interpolates the surrounding pixels by average weighted on proximity.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.Hermite">
+            <summary>Smoothed triangular filter for edge-rounding but blocky results.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.BSpline">
+            <summary>Very smooth interpolation that emulates a Gaussian blurring filter.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.CatmullRom">
+            <summary>Cardinal spline filter considered satisfactory by image experts to avoid blurring.</summary>
+            <remarks>Can overshoot, so it may cause artifacts in HDR near extremely bright areas.</remarks>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureResamplingFilter.MitchellNetravali">
+            <summary>BC-spline filter deemed satisfactory by image experts to generally avoid artifacts.</summary>
+            <remarks>Can overshoot, so it may cause artifacts in HDR near extremely bright areas.</remarks>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.OptionalColor">
+            <summary>An optional color value.</summary>
+            <param name="enabled">Whether the color is enabled.</param>
+            <param name="color">The color value to use if enabled.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.OptionalColor.#ctor(System.Boolean,UnityEngine.Color)">
+            <summary>An optional color value.</summary>
+            <param name="enabled">Whether the color is enabled.</param>
+            <param name="color">The color value to use if enabled.</param>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.OptionalColor.enabled">
+            <summary>Enables or disables the color.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.OptionalColor.color">
+            <summary>The color to use.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.OptionalColor.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.ImageScaleUnit">
+            <summary>Unit for scaling an image in the world.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.PercentOfContainer">
+            <summary>Percentage of width or height, whichever is larger, that corresponds to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.PercentOfCoverage">
+            <summary>Percentage of width or height, whichever is smaller, that corresponds to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.PercentOfWidth">
+            <summary>Percentage of image width that corresponds to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.PercentOfHeight">
+            <summary>Percentage of image height that corresponds to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.Pixels">
+            <summary>How many pixels correspond to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.Inches">
+            <summary>Inches corresponding to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScaleUnit.Centimeters">
+            <summary>Centimeters corresponding to 1 world unit.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.ImageScale">
+            <summary>Scale of an image in the world.</summary>
+            <param name="amount">Amount corresponding to 1 world unit.</param>
+            <param name="unit">Unit that is converted to world units.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.ImageScale.#ctor(System.Single,Alfish.Unity.KRaster.Editor.ImageScaleUnit)">
+            <summary>Scale of an image in the world.</summary>
+            <param name="amount">Amount corresponding to 1 world unit.</param>
+            <param name="unit">Unit that is converted to world units.</param>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScale.amount">
+            <summary>Amount corresponding to 1 world unit.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.ImageScale.unit">
+            <summary>Unit that is converted to world units.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.ImageScale.ToString">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.RectOffsetAttribute">
+            <summary>Mark a Vector4 or RectOffset as representing an int offset for rectangles, borders, etc.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectOffsetAttribute.RectOffset(UnityEngine.Vector4)">
+            <summary>Constructs a rect offset from a sprite border vector.</summary>
+            <param name="v">A sprite border vector (X=left, Y=bottom, Z=right, W=top).</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectOffsetAttribute.Vector4(UnityEngine.RectOffset)">
+            <summary>Get a vector that can be passed as a sprite border to Sprite.Create
+             (X=left, Y=bottom, Z=right, W=top).</summary>
+            <param name="o">A rect offset representing the sprite border.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectOffsetAttribute.ToRect(UnityEngine.Vector4,System.Int32,System.Int32)">
+            <summary>Returns a rect within size, excluding the offset.</summary>
+            <param name="offset">A sprite border vector (X=left, Y=bottom, Z=right, W=top).</param>
+            <param name="width">Total width before removing the offset.</param>
+            <param name="height">Total height before removing the offset.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.RectOffsetAttribute.ToRectInt(UnityEngine.Vector4,System.Int32,System.Int32)">
+            <summary>Returns a rect within size, excluding the offset.</summary>
+            <param name="offset">A sprite border vector (X=left, Y=bottom, Z=right, W=top).</param>
+            <param name="width">Total width before removing the offset.</param>
+            <param name="height">Total height before removing the offset.</param>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.RectPointAttribute">
+            <summary>Restricts a Vector2 point to be inside a rectangle. It's specified relative to its size (0~1).</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.KRasterImporter">
+            <summary>Importer for a Krita or OpenRaster <see cref="T:Alfish.Unity.KRaster.Editor.SourceImage"/>.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.generateFile">
+            <summary>Whether it should generate separate files for the texture importer.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.generateAt">
+            <summary>Path pattern to where the file will be generated.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.generateFramesAt">
+            <summary>Path pattern to where the files will be generated.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.generationMode">
+            <summary>Mode to use for image generation.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.textureShape">
+            <summary>The shape of the imported image.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.textureImportation">
+            <summary>Settings for importing a static image directly from the internal PNG data.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.spriteMode">
+            <summary>Extraction of sprites from images.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.slicing">
+            <summary>Measurements to use for slicing the image.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.spriteImportation">
+            <summary>Sprite importation settings.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.KRasterImporter.spritesheetRegions">
+            <summary>Spritesheet regions that merge grid cells to make bigger sprites.</summary>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.KRasterImporter.OnImportAsset(UnityEditor.AssetImporters.AssetImportContext)">
+            <inheritdoc/>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SlicingMeasure">
+            <summary>Mode for slicing rectangles.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SlicingMeasure.Cells">
+            <summary>Slice by relative cell count.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SlicingMeasure.Pixels">
+            <summary>Slice by absolute cell size.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.RectSlicing">
+            <summary>Measurements to use for slicing a rectangle.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.RectSlicing.margin">
+            <summary>Amount of space to ignore around the whole image.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.RectSlicing.by">
+            <summary>How to slice the rectangle.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.RectSlicing.size">
+            <summary>Measurements for determining size and amount of cells. If negative, fill in reverse order.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.RectSlicing.interspace">
+            <summary>Amount of space between cells, in pixels.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.RectSlicing.vertically">
+            <summary>By default, cells are grouped in rows. Enable this to use column-by-column order instead.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.RectSlicing.skipEmpty">
+            <summary>Skip empty cells, where all pixels match the empty color.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SourceImage">
+            <summary>Represents a source image file in the editor. Detected meta-info is stored in the fields.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SpriteMode">
+            <summary>The shape of the imported image.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteMode.None">
+            <summary>No sprite importation.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteMode.Sprite">
+            <summary>Import a single sprite from the image.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteMode.Spritesheet">
+            <summary>Import multiple sprites from the image according to a spritesheet grid pattern.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SpritesheetRegion">
+            <summary>Spritesheet region that merges grid cells to make bigger sprites.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.at">
+            <summary>Spritesheet grid cell coordinate where the region starts, zero-based.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.cells">
+            <summary>Amount of grid cells per sprite in this region.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.interspace">
+            <summary>Amount of grid cells between sprites to skip in this region, for when sprites are separated.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.sprites">
+            <summary>Amount of sprites in this region.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.spriteNames">
+            <summary>If not empty, overrides the sprite name pattern in this region.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.border">
+            <summary>Overrides the border for sprites in this region.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpritesheetRegion.pivot">
+            <summary>Overrides the pivot for sprites in this region.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.SpriteImportation">
+            <summary>Settings to import sprites directly.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.Default">
+            <summary>Default settings.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.worldUnit">
+            <summary>What size in the sprite corresponds to one unit in the world.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.meshType">
+            <summary>Type of sprite mesh to generate.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.extrudeEdges">
+            <summary>How much empty area to leave around the sprite in the generated mesh.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.generatePhysicsShape">
+            <summary>Generates a default physics shape from the outline of the sprite.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.spriteName">
+            <summary>Name pattern for the sprite.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.spriteNames">
+            <summary>Name pattern for the spritesheet sprites.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.gridSprites">
+            <summary>Add sprites from the sliced grid cells. Disable to add only the sprites defined in the regions.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.border">
+            <summary>The border sizes of the sprite in pixels.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.SpriteImportation.pivot">
+            <summary>Sprite pivot point in its local space.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureFormatBase">
+            <summary>Cross-platform base format used when creating textures.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.Automatic">
+            <summary>Automatically selects an appropriate format.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.RGBA8">
+            <summary>Truecolor + alpha channel. 32bpp.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.RGB8">
+            <summary>Opaque truecolor. 24bpp.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.RG8">
+            <summary>Red and green channels. 16bpp.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.R8">
+            <summary>Red channel. 8bpp.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.RGBA4">
+            <summary>4096 colors + alpha channel. 16bpp.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureFormatBase.R5G6B5">
+            <summary>65536 opaque colors. 16bpp.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureCompression">
+            <summary>Select the kind of compression you want for your texture.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompression.None">
+            <summary>No compression is applied to the base format.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompression.LowQuality">
+            <summary>Use low quality but high performance, high compression format, depending on availability.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompression.NormalQuality">
+            <summary>Compress using a standard format depending on the platform and availability.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompression.HighQuality">
+            <summary>Compress using a high quality format depending on the platform and availability.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureShape">
+            <summary>The shape of the imported image.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureShape.None">
+            <summary>Don't import the image as a sub-asset.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureShape.Texture2D">
+            <summary>Import the image as a 2D texture.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureImportation">
+            <summary>Settings to import textures directly.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.Default">
+            <summary>Default settings.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.textureName">
+            <summary>Name pattern for the texture.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.sRGB">
+            <summary>Texture content is color stored in gamma space.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.alphaIsTransparency">
+            <summary>Flag indicating that the alpha channel is opacity.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.readWrite">
+            <summary>Enable if you need to access the raw pixel data from code. Disable to use less memory.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.generateMipmaps">
+            <summary>Enable mipmap generation.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.mipmapLimit">
+            <summary>How the number of mipmaps to upload to the GPU should be limited by the quality settings.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.wrapMode">
+            <summary>Select how the texture behaves when tiled.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.filterMode">
+            <summary>Select how the imported texture will be filtered when it gets stretched by 3D transformations.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.anisoLevel">
+            <summary>Increases texture quality when viewing it at a steep angle.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.maxSize">
+            <summary>Textures larger than this will be scaled down.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.resamplingFilter">
+            <summary>How to resample the texture during importation. Affects how it looks when resized.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.format">
+            <summary>Specify what internal representation to use for the texture.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureImportation.compression">
+            <summary>How will this texture be compressed?</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.PNGColorType">
+            <summary>Byte value determining color type of a PNG image, as per the PNG specification.</summary>
+            <see href="https://www.w3.org/TR/png-3/#6Colour-values"/>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.UsesPalette">
+            <summary>Indexed in a palette</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.UsesColor">
+            <summary>Colored</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.UsesAlpha">
+            <summary>Has opacity channel</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.Gray">
+            <summary>Grayscale</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.RGB">
+            <summary>Color</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.Palette">
+            <summary>Color palette</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.GrayA">
+            <summary>Grayscale with alpha</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGColorType.RGBA">
+            <summary>Color with alpha</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGTransparency.NoTransparency">
+            <summary>No color can be transparent.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGTransparency.SpecialColorAsTransparent">
+            <summary>One special color value is fully transparent. All other colors are fully opaque.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.PNGTransparency.AlphaChannel">
+            <summary>All colors are associated with an opacity value.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureProcessingCPU">
+            <summary>Texture processing utility for Unity, using parallel CPU threads.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureProcessingGPU">
+            <summary>Texture processing utility for Unity, using GPU compute shaders.</summary>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.MemoryCache`1">
+            <summary>A simple in-memory cache of byte data.</summary>
+            <typeparam name="K">The type of the cache key be set to the data.</typeparam>
+            <param name="maxBytes">Maximum allowed size of cached data in bytes.</param>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.MemoryCache`1.#ctor(System.Int32)">
+            <summary>A simple in-memory cache of byte data.</summary>
+            <typeparam name="K">The type of the cache key be set to the data.</typeparam>
+            <param name="maxBytes">Maximum allowed size of cached data in bytes.</param>
+        </member>
+        <member name="T:Alfish.Unity.KRaster.Editor.TextureCompressionFormat">
+            <summary>Options for the compressed texture formats that are available on the target build platform.</summary>
+            <remarks>Public since 2023.1.</remarks>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.Unknown">
+            <summary>Use an undefined texture compression format.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.ETC">
+            <summary>Use ETC1 texture compression (or ETC2 for textures with alpha).</summary>
+            <remarks>The ETC1 texture compression format is available on all Android devices.</remarks>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.ETC2">
+            <summary>Use ETC2 texture compression.</summary>
+            <remarks>The ETC2 texture compression format is only available on devices that support OpenGL ES 3.0.</remarks>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.ASTC">
+            <summary>Use ASTC texture compression.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.PVRTC">
+            <summary>Use PowerVR texture compression.</summary>
+            <remarks>This texture compression format is only available on devices that have a PowerVR GPU.</remarks>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.DXTC">
+            <summary>Use S3 texture compression (DXT1, DXT5).</summary>
+            <remarks>This format is only available on devices that have NVidia Tegra, Vivante and Intel GPUs.</remarks>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.BPTC">
+            <summary>Use BPTC (BC6H, BC7) texture compression + DXT + RGTC.</summary>
+        </member>
+        <member name="F:Alfish.Unity.KRaster.Editor.TextureCompressionFormat.DXTC_RGTC">
+            <summary>Use DXT + RGTC (BC4, BC5) texture compression.</summary>
+            <remarks>This texture compression format is only available on devices that have AMD GPU (Magic Leap 2).
+             Public since 2023.1.</remarks>
+        </member>
+        <member name="M:Alfish.Unity.KRaster.Editor.UnityCompat.GetDefaultTextureCompressionFormat(UnityEditor.BuildTarget,UnityEditor.BuildTargetGroup)">
+            <summary>Call internal PlayerSettings.GetDefaultTextureCompressionFormat.</summary>
+             <param name="platform">The platform to check (Unity 6 or higher).</param>
+             <param name="group">The platform group to check (before Unity 6).</param>
+            <returns>A TextureCompressionFormat enum value; or null if the method is unavailable.</returns>
+        </member>
+        <member name="P:Alfish.Unity.KRaster.Editor.UnityCompat.textureCompressionFormats">
+            <summary>Target texture compression formats for Android. Since 2023.1.</summary>
+        </member>
+    </members>
+</doc>

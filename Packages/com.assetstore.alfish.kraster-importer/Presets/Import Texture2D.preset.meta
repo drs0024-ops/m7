@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 21a39f595e732781c93aa4d42b92d326
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2655988077585873504
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 227895
+  packageName: Importer for Krita and OpenRaster + animation and image converter
+  packageVersion: 0.4.2
+  assetPath: Packages/com.assetstore.alfish.kraster-importer/Presets/Import Texture2D.preset
+  uploadId: 856610

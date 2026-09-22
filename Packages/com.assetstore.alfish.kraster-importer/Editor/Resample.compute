@@ -1,0 +1,123 @@
+// (C) 2025-present Alfish. All rights not expressly granted are reserved.
+
+// Unity Compute Shader for 2D image resampling.
+// Filters: Point, Box, Bilinear, Hermite, B-spline, Catmull-Rom, Mitchell-Netravali.
+// It takes a source Texture and writes the resized result into a RenderTexture.
+//
+// After binding the input and output textures, the shader must be dispatched with these thread groups:
+// (ceil(newWidth/16), ceil(newHeight/16), 1)
+//
+// Each thread computes one output pixel. All main logic is in the [numthreads(16, 16, 1)] kernel.
+// So each 16x16 block of output pixels is processed in the same thread group, efficiently in parallel.
+
+#define NAN asfloat(0x7FC00000)
+#define THIRD 0.33333333333333333
+
+#pragma editor_sync_compilation
+#pragma multi_compile_local _ ALPHA_IS_TRANSPARENCY
+#pragma kernel Point             MAIN=Point             POINT
+#pragma kernel Box               MAIN=Box               BOX       SUPPORT=0.5f
+#pragma kernel Bilinear          MAIN=Bilinear          BILINEAR  SUPPORT=1
+#pragma kernel Hermite           MAIN=Hermite           BC_SPLINE SUPPORT=1 B=0     C=0
+#pragma kernel BSpline           MAIN=BSpline           BC_SPLINE SUPPORT=2 B=1     C=0
+#pragma kernel CatmullRom        MAIN=CatmullRom        BC_SPLINE SUPPORT=2 B=0     C=0.5f
+#pragma kernel MitchellNetravali MAIN=MitchellNetravali BC_SPLINE SUPPORT=2 B=THIRD C=THIRD
+
+// Output RenderTexture
+RWTexture2D<float4> _ResultTex;
+// Input Texture
+Texture2D<float4> _SourceTex; SamplerState sampler_SourceTex;
+
+#if defined(BOX)
+// Evaluate the Box kernel for a given distance d
+float Evaluate(float d) {
+	return abs(d) <= 0.5 ? 1 : 0;
+}
+#elif defined(BILINEAR)
+// Evaluate the Bilinear (triangle) kernel for a given distance d
+float Evaluate(float d) {
+	d = abs(d);
+	return d < 1 ? 1 - d : 0;
+}
+#elif defined(BC_SPLINE)
+// Evaluate the BC-Spline kernel for a given distance d
+float Evaluate(float d) {
+	d = abs(d);
+	float d2 = d * d, d3 = d2 * d;
+	return d < 1 ? ((12 - 9 * B - 6 * C) * d3 + (-18 + 12 * B + 6 * C) * d2 + (6 - 2 * B)) / 6
+	: d < 2 ? ((-B - 6 * C) * d3 + (6 * B + 30 * C) * d2 + (-12 * B - 48 * C) * d + (8 * B + 24 * C)) / 6
+	: 0;
+}
+#endif
+
+[numthreads(16, 16, 1)]
+void MAIN(const int2 id : SV_DispatchThreadID) {
+	int dstW, dstH; _ResultTex.GetDimensions(dstW, dstH);
+	const int dstX = id.x, dstY = id.y;
+	if (dstX >= dstW || dstY >= dstH) return;
+	// Source image size
+	int srcW, srcH; _SourceTex.GetDimensions(srcW, srcH);
+	// Get scale ratios
+	float scaleX = float(dstW) / srcW, scaleY = float(dstH) / srcH;
+	// Output pixel center mapped into source pixel space
+	float srcXc = (dstX + 0.5f) / scaleX - 0.5f;
+	float srcYc = (dstY + 0.5f) / scaleY - 0.5f;
+	// Implementation branches
+#if defined(POINT)
+	// Nearest neighbor: just pick the nearest pixel; should not need clamping
+	int sx = int(round(srcXc)), sy = int(round(srcYc));
+	float4 o = _SourceTex.Load(int3(sx, sy, 0));
+#else
+	// Values to accumulate by applying kernel
+	float4 o = float4(0, 0, 0, 0);
+#if ALPHA_IS_TRANSPARENCY
+	float wcSum = 0;
+#endif
+	float wSum = 0;
+	// Conditional scale ratios so support window matches quality of biggest image
+	float downscaleX = scaleX < 1 ? scaleX : 1;
+	float downscaleY = scaleY < 1 ? scaleY : 1;
+	// Kernel support window; if downscaling, enlarged to match quality of source image
+	float support = SUPPORT;
+	float supportX = support / downscaleX;
+	float supportY = support / downscaleY;
+	int minX = int(ceil(srcXc - supportX));
+	int maxX = int(floor(srcXc + supportX));
+	int minY = int(ceil(srcYc - supportY));
+	int maxY = int(floor(srcYc + supportY));
+	// Iterate on kernel pixels vertically
+	for (int sy = minY; sy <= maxY; ++sy) {
+		float dy = (sy - srcYc) * downscaleY;
+		float wy = Evaluate(dy);
+		if (wy == 0) continue;
+		float sv = (sy + 0.5f) / srcH;
+		// Iterate on kernel pixels horizontally
+		for (int sx = minX; sx <= maxX; ++sx) {
+			float dx = (sx - srcXc) * downscaleX;
+			float wx = Evaluate(dx);
+			if (wx == 0) continue;
+			float su = (sx + 0.5f) / srcW;
+			float w = wx * wy; // separable 2D kernel: kernel(x, y) = kernel(x) * kernel(y)
+			float4 k = _SourceTex.SampleLevel(sampler_SourceTex, float2(su, sv), 0);
+			// Accumulate kernel values
+#if ALPHA_IS_TRANSPARENCY
+			float wa = k.a * w;
+			o += float4(k.rgb * wa, wa);
+			wcSum += wa;
+#else
+			o += k * w;
+#endif
+			wSum += w;
+		}
+	}
+	// Normalize the result by the sum of weights
+#if ALPHA_IS_TRANSPARENCY
+	if (wcSum != 0) o.rgb /= wcSum;
+	if (wSum != 0) o.a /= wSum;
+#else
+	if (wSum != 0) o /= wSum;
+#endif
+#endif // defined(POINT)
+	// Result of this pixel
+	_ResultTex[id] = o;
+}

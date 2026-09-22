@@ -1,0 +1,5 @@
+// GameState.cs retained as a placeholder file.
+// Duplicate GameManager implementation removed to avoid compile conflicts.
+/// <summary>
+/// Enumeration of all possible global game states.
+/// </summary>

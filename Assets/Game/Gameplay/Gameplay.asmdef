@@ -1,0 +1,27 @@
+{
+    "name": "Gameplay",
+    "rootNamespace": "Game.Gameplay",
+    "references": [
+        "Core",
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "VContainer",
+        "UniTask",
+        "Unity.Cinemachine",
+        "LeanTween",
+        "Unity.TextMeshPro",
+        "Unity.InputSystem",
+        "Unity.RenderPipelines.Universal.2D.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        ""
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

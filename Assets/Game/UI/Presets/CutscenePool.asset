@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a5da9795e2be42d68c29193016556e6, type: 3}
+  m_Name: CutscenePool
+  m_EditorClassIdentifier: Core::Game.Core.Data.CutscenePoolSO
+  newGamePool:
+  - {fileID: 32900000, guid: a94dd3220dded4977b000ff89d225e0e, type: 3}
+  perLevel: []

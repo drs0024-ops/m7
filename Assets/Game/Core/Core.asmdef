@@ -1,0 +1,17 @@
+{
+    "name": "Core",
+    "rootNamespace": "Game.Core",
+    "references": [
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "VContainer",
+        "UniTask",
+        "LeanTween"
+    ],
+    "autoReferenced": true,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}   

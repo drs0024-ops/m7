@@ -1,0 +1,16 @@
+{
+    "name": "Editor",
+    "rootNamespace": "Game.Editor",
+    "references": [
+        "Bootstrap",
+        "Core",
+        "Gameplay",
+        "UI"
+    ],
+    "autoReferenced": true,
+    "overrideReferences": true,
+    "precompiledReferences": [],
+    "defineConstraints": ["UNITY_EDITOR"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}   

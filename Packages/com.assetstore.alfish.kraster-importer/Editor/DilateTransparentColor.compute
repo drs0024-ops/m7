@@ -1,0 +1,60 @@
+// (C) 2025-present Alfish. All rights not expressly granted are reserved.
+
+// Unity Compute Shader for 2D image color dilation in fully transparent pixels around non-transparent pixels.
+// Used to avoid artifacts in textures with alpha transparency that use a bilinear or trilinear filter mode.
+// It takes a source Texture and writes the resized result into a RenderTexture.
+//
+// After binding the input and output textures, the shader must be dispatched with these thread groups:
+// (ceil(newWidth/16), ceil(newHeight/16), 1)
+//
+// Each thread computes one output pixel. All main logic is in the [numthreads(16, 16, 1)] kernel.
+// So each 16x16 block of output pixels is processed in the same thread group, efficiently in parallel.
+
+#pragma editor_sync_compilation
+#pragma kernel Simple
+
+// Output RenderTexture
+RWTexture2D<float4> _ResultTex;
+// Input Texture
+Texture2D<float4> _SourceTex; SamplerState sampler_SourceTex;
+
+float Accumulate(inout float4 o, float2 s, float w) {
+	float4 k = _SourceTex.SampleLevel(sampler_SourceTex, s, 0);
+	float wa = k.a * w;
+	o += float4(k.rgb * wa, 0);
+	return wa;
+}
+
+[numthreads(16, 16, 1)]
+void Simple(const int2 id : SV_DispatchThreadID) {
+	int2 size; _ResultTex.GetDimensions(size.x, size.y);
+	if (id.x >= size.x || id.y >= size.y) return;
+	// Only change fully transparent pixels
+	float4 o = _SourceTex[id];
+	if (o.a != 0) {
+		_ResultTex[id] = o;
+		return;
+	}
+	// Values to accumulate by applying kernel
+	o = float4(0, 0, 0, 0);
+	float wcSum = 0;
+	// Precalculate all coordinates
+	float2 sA = (id - 0.5f) / size;
+	float2 sM = (id + 0.5f) / size;
+	float2 sZ = (id + 1.5f) / size;
+	// Iterate on kernel pixels efficiently
+	const float wEdge = 2, wCorner = 1;
+	wcSum += Accumulate(o, float2(sA.x, sA.y), wCorner);
+	wcSum += Accumulate(o, float2(sM.x, sA.y), wEdge);
+	wcSum += Accumulate(o, float2(sZ.x, sA.y), wCorner);
+	wcSum += Accumulate(o, float2(sA.x, sM.y), wEdge);
+	// (sM.x, sM.y) is the pixel itself, which is not considered
+	wcSum += Accumulate(o, float2(sZ.x, sM.y), wEdge);
+	wcSum += Accumulate(o, float2(sA.x, sZ.y), wCorner);
+	wcSum += Accumulate(o, float2(sM.x, sZ.y), wEdge);
+	wcSum += Accumulate(o, float2(sZ.x, sZ.y), wCorner);
+	// Normalize the result by the sum of weights
+	if (wcSum != 0) o.rgb /= wcSum;
+	// Result of this pixel
+	_ResultTex[id] = o;
+}

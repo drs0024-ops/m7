@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: a1ccdc96ffadae30bb082ba06433c459
+ComputeShaderImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 227895
+  packageName: Importer for Krita and OpenRaster + animation and image converter
+  packageVersion: 0.4.2
+  assetPath: Packages/com.assetstore.alfish.kraster-importer/Editor/DilateTransparentColor.compute
+  uploadId: 856610

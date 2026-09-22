@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5d58eefe3aa14f6880c04c379a3282f, type: 3}
+  m_Name: WanderEnemy
+  m_EditorClassIdentifier: Assembly-CSharp::ESM.EnemyMovementStats
+  enemyName: SpiderLady
+  maxHealth: 20
+  damage: 1
+  enemyPrefab: {fileID: 5709206930770955627, guid: 265057ce11f8f44658e9d324528685c5, type: 3}
+  MaxWalkSpeed: 2.3
+  GroundAcceleration: 5
+  GroundDeceleration: 20
+  AirAcceleration: 5
+  AirDeceleration: 5
+  MaxRunSpeed: 4.1
+  GroundLayer:
+    serializedVersion: 2
+    m_Bits: 8
+  GroundDetectionRayLenth: 0.02
+  HeadDetectionRayLenth: 0.02
+  HeadWidth: 0.75
+  JumpHeight: 6.5
+  JumpHeightCompensationFactor: 1.054
+  TimeTillJumpApex: 0.35
+  GravityOnReleaseMultiplier: 2
+  MaxFallSpeed: 26
+  NumberOfJumpsAllowed: 2
+  TimeForUpwardsCancel: 0.027
+  ApexThreshold: 0.97
+  ApexHangTime: 0.75
+  JumpBufferTime: 0.125
+  JumpCoyoteTime: 0.1
+  DebugShowIsGroundedBox: 0
+  DebugShowHeadBumpBox: 0
+  ShowWalkJumpArc: 0
+  ShowRunJumpArc: 0
+  StopOnCollion: 1
+  DrawRight: 1
+  ArcResolution: 20
+  VisualizationSteps: 90

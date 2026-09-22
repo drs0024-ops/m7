@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3539bcd105d3112358017b67772aabb8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 1
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 227895
+  packageName: Importer for Krita and OpenRaster + animation and image converter
+  packageVersion: 0.4.2
+  assetPath: Packages/com.assetstore.alfish.kraster-importer/Editor/SourceImage Icon.asset
+  uploadId: 856610

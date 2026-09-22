@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e117a7830928f4a128dbf469e7c13bc4, type: 3}
+  m_Name: CRT_Dead
+  m_EditorClassIdentifier: UI::Game.UI.CRTShaderPreset
+  failureAmount: 0.15
+  transitionOpacity: 1
+  phosphorColor: {r: 0.8018868, g: 0.36339152, b: 0.14751692, a: 1}
+  tearColor: {r: 0, g: 0.8, b: 0.3, a: 1}
+  tearSpeed: 0.25
+  tearPauseMin: 1
+  tearPauseMax: 5
+  tearDirection: 1
+  tearOpacity: 1
+  tearFontSize: 24
+  tearLeadingOpacity: 1
+  tearTrailingOpacity: 0
+  retraceSpeed: 0.05
+  retraceSpeed2: 0.03
+  retraceHeight: 0.001
+  retraceOpacity: 1
+  retraceIntensity: 0.6
+  retraceDirection: 0
+  rollBarIdleIntensity: 0.15
+  rollBarTransitionIntensity: 1
+  transitionDuration: 0.066

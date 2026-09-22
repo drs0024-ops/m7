@@ -23,3 +23,54 @@ EOF
 ls -a .gitignore
 git add .gitignore
 git commit -m "Add Unity .gitignore"
+
+# Unity iOS build artifacts
+Bone Yard Escape
+*-Control/
+
+# Crash dumps
+mono_crash.*
+*.mem.*
+
+# Temp variants
+Temp*/
+*.slnx
+Assets/Art/
+
+
+# Large media (not backed up to Git)
+Assets/Art/
+Assets/Game/AudioFiles/
+Assets/Game/FREE Adventure Music Pack/
+Assets/Fonts/
+Assets/Sprites/
+Assets/SpriteAtlas/
+Assets/Spritesheet.png
+Assets/IdleTP-default.png
+Assets/Robot player test.png
+Assets/player with beard 258.png
+Assets/Sprit size test.png
+Assets/Animation/
+Assets/URP/
+Assets/LeanTween/
+Assets/TextMesh Pro/
+Assets/Plugins/
+Assets/codeandweb.com/
+Assets/Materials/
+Assets/Settings/
+Assets/Prefabs/
+Assets/Resources/
+Assets/DustEffect/
+Assets/Environments_sample/
+Assets/Tile Palets/
+Assets/Physicis Material/
+Assets/UI Toolkit/
+Assets/_Recovery/
+Assets/Project/
+Assets/Global Volume Profile*.asset
+Assets/panelConfigNormal.asset
+Assets/DefaultVolumeProfile.asset
+Assets/UniversalRenderPipelineGlobalSettings.asset
+Assets/TexturePacker-default.tpsheet
+Assets/FrictionSever.physicsMaterial2D
+Assets/StaticFriction.physicMaterial   

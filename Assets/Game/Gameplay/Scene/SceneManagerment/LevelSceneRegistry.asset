@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11075d638467e4adf985edbf62f0a92e, type: 3}
+  m_Name: LevelSceneRegistry
+  m_EditorClassIdentifier: Assembly-CSharp::LevelConfigSO
+  startingLevelIndex: 0
+  allLevels:
+  - levelName: Facility
+    scenes:
+    - _sceneAsset: {fileID: 102900000, guid: bca8a32e464e14930a0d51496455333b, type: 3}
+      _sceneName: Facility
+    - _sceneAsset: {fileID: 102900000, guid: 26f4b4ac499ea407594038203a4b70ba, type: 3}
+      _sceneName: Facility2
+  - levelName: Forest
+    scenes:
+    - _sceneAsset: {fileID: 102900000, guid: 1853ea21bee9e4fdd93a5e243fcec414, type: 3}
+      _sceneName: Forrest

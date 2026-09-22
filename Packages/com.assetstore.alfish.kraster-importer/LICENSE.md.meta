@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 7dc289bd2acd95afabd1b2aa0f167e85
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 227895
+  packageName: Importer for Krita and OpenRaster + animation and image converter
+  packageVersion: 0.4.2
+  assetPath: Packages/com.assetstore.alfish.kraster-importer/LICENSE.md
+  uploadId: 856610

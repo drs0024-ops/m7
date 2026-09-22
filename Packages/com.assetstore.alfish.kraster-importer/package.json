@@ -1,0 +1,40 @@
+{
+	"name": "com.assetstore.alfish.kraster-importer",
+	"version": "0.4.2",
+	"displayName": "KRaster Importer",
+	"description": "Import Krita and OpenRaster files directly, simplifying your workflow. Assets auto-reimport every time you make changes. KRA/ORA files are free alternatives to proprietary formats like PSD.",
+	"unity": "2022.3",
+	"author": {
+		"name": "Alfish",
+		"url": "https://assetstore.unity.com/publishers/30331"
+	},
+	"license": "See Unity Asset Store EULA",
+	"licensesUrl": "https://unity.com/legal/as-terms",
+	"changelogUrl": "https://assetstore.unity.com/packages/slug/227895#releases",
+	"documentationUrl": "https://bitbucket.org/alfish/kraster-importer-for-unity/wiki/",
+	"hideInEditor": true,
+	"category": "2D",
+	"type": "tool",
+	"keywords": [
+		"Krita",
+		"OpenRaster",
+		"importer",
+		"images",
+		"kra",
+		"ora",
+		"png",
+		"exr",
+		"drawing",
+		"integration",
+		"compatibility",
+		"texture",
+		"sprite",
+		"animation"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://bitbucket.org/alfish/kraster-importer-for-unity.git"
+	},
+	"dependencies": {
+	}
+}
