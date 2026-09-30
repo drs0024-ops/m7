@@ -9,113 +9,80 @@ using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Gameplay.Save
 {
+    /// <summary>
+    /// Manages save/load lifecycle. Subscribes to SaveRequest/LoadRequest,
+    /// serializes all ISaveable implementations, and writes to disk.
+    /// Debounces saves by SAVE_DELAY seconds unless Immediate.
+    /// </summary>
     public class SaveManager : IStartable, IDisposable, ITickable
     {
         private const int SAVE_LOAD_BUDGET_MS = 50;
+        private const float SAVE_DELAY = 1.0f;
+        private const int CurrentSaveVersion = 1;
 
-        private IPublisher<SaveCompleted> _saveCompletedPublisher;
-        private IPublisher<SaveFailed> _saveFailedPublisher;
-        private IPublisher<LoadCompleted> _loadCompletedPublisher;
-        private ISubscriber<SaveRequest> _saveRequestSub;
-        private ISubscriber<LoadRequest> _loadRequestSub;
-        private IPublisher<LoadFailed> _loadFailedPublisher;
+        #region Dependencies
 
+        private readonly IPublisher<SaveCompleted> _saveCompletedPublisher;
+        private readonly IPublisher<SaveFailed> _saveFailedPublisher;
+        private readonly IPublisher<LoadCompleted> _loadCompletedPublisher;
+        private readonly IPublisher<LoadFailed> _loadFailedPublisher;
+        private readonly ISubscriber<SaveRequest> _saveRequestSub;
+        private readonly ISubscriber<LoadRequest> _loadRequestSub;
+        private readonly ISubscriber<DeleteSaveRequested> _deleteSaveSub;
         private readonly ISaveableRegistry _registry;
         private readonly SaveConfigSO _config;
 
+        #endregion
+
+        #region State
+
         private bool _isSavePending;
         private float _saveTimer;
-        private const float SAVE_DELAY = 1.0f;
-        public bool HasSave => CurrentLevelName != null;
-
         private SaveDataContainer _currentSaveData = new();
-        private string SavePath => Path.Combine(Application.persistentDataPath, _config.saveFileName);
-
-        private readonly List<IDisposable> _subscriptions = new();
+        private readonly List<IDisposable> _subscriptions = new(2);
         private CancellationTokenSource _cts;
         private bool _disposed;
 
-        private const int CurrentSaveVersion = 1;
+        private static readonly Dictionary<Type, MethodInfo> _fromJsonCache = new();
+
+        #endregion
+
+        #region Public API
+
+        public bool HasSave => CurrentLevelName != null;
 
         /// <summary>
         /// The level scene name from the most recently loaded save. Null if no save loaded.
         /// </summary>
         public string CurrentLevelName { get; private set; }
 
-        [Inject]
-        public SaveManager(ISaveableRegistry registry, SaveConfigSO config)
+        private string SavePath => Path.Combine(Application.persistentDataPath, _config.saveFileName);
+
+        public SaveManager(
+            ISaveableRegistry registry,
+            SaveConfigSO config,
+            IPublisher<SaveCompleted> saveCompletedPublisher,
+            IPublisher<SaveFailed> saveFailedPublisher,
+            IPublisher<LoadCompleted> loadCompletedPublisher,
+            IPublisher<LoadFailed> loadFailedPublisher,
+            ISubscriber<SaveRequest> saveRequestSub,
+            ISubscriber<LoadRequest> loadRequestSub,
+            ISubscriber<DeleteSaveRequested> deleteSaveSub)
         {
             _registry = registry;
             _config = config;
+            _saveCompletedPublisher = saveCompletedPublisher;
+            _saveFailedPublisher = saveFailedPublisher;
+            _loadCompletedPublisher = loadCompletedPublisher;
+            _loadFailedPublisher = loadFailedPublisher;
+            _saveRequestSub = saveRequestSub;
+            _loadRequestSub = loadRequestSub;
+            _deleteSaveSub = deleteSaveSub;
         }
-
-        #region IStartable
-
-        void IStartable.Start()
-        {
-            _cts = new CancellationTokenSource();
-
-            _saveCompletedPublisher = GlobalMessagePipe.GetPublisher<SaveCompleted>();
-            _saveFailedPublisher = GlobalMessagePipe.GetPublisher<SaveFailed>();
-            _loadCompletedPublisher = GlobalMessagePipe.GetPublisher<LoadCompleted>();
-            _saveRequestSub = GlobalMessagePipe.GetSubscriber<SaveRequest>();
-            _loadRequestSub = GlobalMessagePipe.GetSubscriber<LoadRequest>();
-            _loadFailedPublisher = GlobalMessagePipe.GetPublisher<LoadFailed>();   
-
-            _subscriptions.Add(_saveRequestSub.Subscribe(OnSaveRequested));
-            _subscriptions.Add(_loadRequestSub.Subscribe(_ => OnLoadRequested()));
-        }
-
-        #endregion
-
-        #region ITickable
-
-        public void Tick()
-        {
-            if (_disposed || !_isSavePending || Time.timeScale < 0.01f) return;
-
-            _saveTimer -= Time.deltaTime;
-            if (_saveTimer <= 0f)
-            {
-                _isSavePending = false;
-                PerformSave();
-            }
-        }
-
-        #endregion
-
-        #region Message Handlers
-
-        private void OnSaveRequested(SaveRequest msg)
-        {
-            if (_disposed) return;
-
-            if (msg.Immediate)
-            {
-                _isSavePending = false;
-                _saveTimer = 0f;
-                PerformSave();
-            }
-            else
-            {
-                RequestSave();
-            }
-        }
-
-        private void OnLoadRequested()
-        {
-            if (_disposed) return;
-            LoadAsync().Forget();
-        }
-
-        #endregion
-
-        #region Public API
 
         public void RequestSave()
         {
@@ -162,7 +129,63 @@ namespace Game.Gameplay.Save
                 if (!_disposed)
                     _loadFailedPublisher.Publish(new LoadFailed(e.Message));
             }
-        }   
+        }
+
+        #endregion
+
+        #region IStartable
+
+        void IStartable.Start()
+        {
+            _cts = new CancellationTokenSource();
+
+            _subscriptions.Add(_saveRequestSub.Subscribe(OnSaveRequested));
+            _subscriptions.Add(_loadRequestSub.Subscribe(_ => OnLoadRequested()));
+            _subscriptions.Add(_deleteSaveSub.Subscribe(_ => DeleteSave()));
+
+        }
+
+        #endregion
+
+        #region ITickable
+
+        void ITickable.Tick()
+        {
+            if (_disposed || !_isSavePending || Time.timeScale < 0.01f) return;
+
+            _saveTimer -= Time.deltaTime;
+            if (_saveTimer <= 0f)
+            {
+                _isSavePending = false;
+                PerformSave();
+            }
+        }
+
+        #endregion
+
+        #region Message Handlers
+
+        private void OnSaveRequested(SaveRequest msg)
+        {
+            if (_disposed) return;
+
+            if (msg.Immediate)
+            {
+                _isSavePending = false;
+                _saveTimer = 0f;
+                PerformSave();
+            }
+            else
+            {
+                RequestSave();
+            }
+        }
+
+        private void OnLoadRequested()
+        {
+            if (_disposed) return;
+            LoadAsync().Forget();
+        }
 
         #endregion
 
@@ -171,10 +194,11 @@ namespace Game.Gameplay.Save
         private void PerformSave()
         {
             if (_disposed) return;
-            _isSavePending = false;  // ← add
-            _saveTimer = 0;          // ← add
+            _isSavePending = false;
+            _saveTimer = 0f;
             SaveAsyncCore(_cts.Token).Forget();
         }
+
         private async UniTask SaveAsyncCore(CancellationToken token)
         {
             try
@@ -221,13 +245,13 @@ namespace Game.Gameplay.Save
             {
                 File.WriteAllText(path, encrypted);
             }, cancellationToken: token);
-        }   
-        
+        }
+
         private async UniTask<string> LoadAsyncCore(CancellationToken token)
         {
-        #if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             var sw = System.Diagnostics.Stopwatch.StartNew();
-        #endif
+#endif
 
             string path = SavePath;
 
@@ -238,28 +262,33 @@ namespace Game.Gameplay.Save
 
             string result = Decrypt(encrypted);
 
-        #if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             sw.Stop();
             long ms = sw.ElapsedMilliseconds;
             Debug.Log($"[Perf] SaveLoad took {ms}ms");
             if (ms > SAVE_LOAD_BUDGET_MS)
                 Debug.LogWarning($"[Perf][WARN] SaveLoad took {ms}ms (budget: {SAVE_LOAD_BUDGET_MS}ms)");
-        #endif   
+#endif
 
             return result;
-        }   
+        }
 
         private static ISaveData DeserializeSaveData(string json, Type targetType)
         {
             try
             {
-                MethodInfo method = typeof(JsonUtility).GetMethod("FromJson", new[] { typeof(string) });
-                MethodInfo genericMethod = method.MakeGenericMethod(targetType);
+                if (!_fromJsonCache.TryGetValue(targetType, out MethodInfo genericMethod))
+                {
+                    MethodInfo method = typeof(JsonUtility).GetMethod("FromJson", new[] { typeof(string) });
+                    genericMethod = method.MakeGenericMethod(targetType);
+                    _fromJsonCache[targetType] = genericMethod;
+                }
+
                 return genericMethod.Invoke(null, new object[] { json }) as ISaveData;
             }
             catch (Exception e)
             {
-                Debug.LogError($"[SaveManager] Deserialize failed for {targetType.Name}: {e}");
+                Debug.LogError($"[SaveManager] Deserialize failed for {targetType.Name}: {e.InnerException ?? e}");
                 return null;
             }
         }
@@ -280,7 +309,7 @@ namespace Game.Gameplay.Save
             if (_disposed) return;
             _disposed = true;
 
-            // 1. Flush pending save (synchronous, <1ms)
+            // 1. Flush pending save (synchronous, last-resort safety net)
             if (_isSavePending)
             {
                 _isSavePending = false;
@@ -295,8 +324,8 @@ namespace Game.Gameplay.Save
             }
 
             // 2. Dispose subscriptions
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
 
             // 3. Cancel + dispose CTS
@@ -306,7 +335,7 @@ namespace Game.Gameplay.Save
 
             // 4. Release save data references
             _currentSaveData = null;
-        }   
+        }
 
         private void SaveSync()
         {
@@ -333,11 +362,28 @@ namespace Game.Gameplay.Save
             {
                 Debug.LogError($"[SaveManager] Final save failed: {e}");
             }
-        }   
+        }
+
+        #endregion
+
+        #region Delete save
+
+        public void DeleteSave()
+        {
+            if (_disposed) return;
+            string path = SavePath;
+            UniTask.RunOnThreadPool(() =>
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }, cancellationToken: _cts.Token).Forget();
+
+            CurrentLevelName = null;
+            _currentSaveData = new SaveDataContainer();
+        }  
 
         #endregion
     }
-}   
+}    
 
 #region Pre VContainer version
 /*

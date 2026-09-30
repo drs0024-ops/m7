@@ -1,30 +1,27 @@
 using System;
-using System.Collections.Generic;
 using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
+using VContainer;
 using VContainer.Unity;
 
 namespace Game.Gameplay.World
 {
-    public class Checkpoint : MonoBehaviour, ICheckpoint, IStartable, IDisposable
+    public class Checkpoint : MonoBehaviour, ICheckpoint, IDisposable
     {
         [SerializeField] private string _checkpointId = "CP_Default";
         [SerializeField] private bool _oneTimeTrigger = true;
         [SerializeField] private Transform _spawnOffset;
 
         private IPublisher<CheckpointReached> _checkpointReachedPublisher;
-        private readonly List<IDisposable> _subscriptions = new();
         private bool _hasBeenReached;
         private bool _disposed;
 
-        public Checkpoint() {}
-
-        void IStartable.Start()
+        [Inject]
+        private void Inject(IPublisher<CheckpointReached> checkpointReachedPublisher)
         {
-            _checkpointReachedPublisher = GlobalMessagePipe.GetPublisher<CheckpointReached>();
-
+            _checkpointReachedPublisher = checkpointReachedPublisher;
         }
 
         #region ICheckpoint
@@ -60,25 +57,14 @@ namespace Game.Gameplay.World
             if (_hasBeenReached && _oneTimeTrigger) return;
 
             Activate();
-            _checkpointReachedPublisher.Publish(new CheckpointReached(_checkpointId, GetSpawnPosition()));   
+            _checkpointReachedPublisher.Publish(new CheckpointReached(_checkpointId, GetSpawnPosition()));
         }
 
-        private void Dispose()
-        {
-            if (_disposed) return;
-                _disposed = true;
-                foreach (var d in _subscriptions)
-                    d?.Dispose();
-                _subscriptions.Clear();
-        }
-
-        private void OnDestroy() => Dispose();
+        private void OnDestroy() => ((IDisposable)this).Dispose();
 
         void IDisposable.Dispose()
         {
-            Dispose();
+            _disposed = true;
         }
     }
-
-    
 }   

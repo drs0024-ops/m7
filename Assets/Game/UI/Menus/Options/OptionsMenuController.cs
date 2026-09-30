@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 using MessagePipe;
-using VContainer;
 using Game.Core.Messages;
 using Game.Gameplay.Player;
 using Game.Core.Interfaces;
 using Game.Core.Enums;
+using VContainer.Unity;
+using VContainer;
 
 namespace Game.UI
 {
@@ -29,13 +30,16 @@ namespace Game.UI
         [SerializeField] private GameObject[] _subPanels;
         [SerializeField] private GameObject _categoryListPanel;
 
-        [Header("Panel to hide and sho")]
-        [SerializeField] private GameObject _panelContent;  
-
+        [Header("Panel")]
+        [SerializeField] private GameObject _panelContent;
 
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
         [Inject] private IAudioManager _audio;
+        [Inject] private IPublisher<OptionsCloseRequested> _closePublisher;
+        [Inject] private IPublisher<OptionsPanelStateChanged> _stateChangedPublisher;
+        [Inject] private ISubscriber<OptionsOpenRequested> _openSub;
+        [Inject] private ISubscriber<OptionsCloseRequested> _closeSub;
 
         [Header("Blink")]
         [SerializeField] private float _blinkInterval = 0.5f;
@@ -55,8 +59,6 @@ namespace Game.UI
         private float _blinkTimer;
         private bool _cursorVisible = true;
 
-        private IPublisher<OptionsCloseRequested> _closePublisher;
-        private IPublisher<OptionsPanelStateChanged> _stateChangedPublisher;
         private readonly List<IDisposable> _subscriptions = new(2);
 
         #endregion
@@ -74,12 +76,14 @@ namespace Game.UI
             if (_categoryTexts == null || _categoryTexts.Length == 0)
             {
                 Debug.LogError("[OptionsMenu] _categoryTexts not assigned!", this);
+                enabled = false;
                 return;
             }
 
             if (_subPanels == null || _subPanels.Length != _categoryTexts.Length)
             {
                 Debug.LogError("[OptionsMenu] _subPanels length must match _categoryTexts!", this);
+                enabled = false;
                 return;
             }
 
@@ -93,24 +97,21 @@ namespace Game.UI
                 _categoryTexts[i].text = string.Empty;
             }
 
-            // Subscriptions set up in Awake (root is active, so this fires on scene load)
-            _closePublisher = GlobalMessagePipe.GetPublisher<OptionsCloseRequested>();
-            _stateChangedPublisher = GlobalMessagePipe.GetPublisher<OptionsPanelStateChanged>();
-
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<OptionsOpenRequested>()
-                .Subscribe(_ => OpenPanel()));
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<OptionsCloseRequested>()
-                .Subscribe(_ => ClosePanel()));
-  
-
-            // Start hidden
             _panelOpen = false;
             SetVisualActive(false);
         }
 
+        private void Start()
+        {
+            if (!enabled) return;
+
+            _subscriptions.Add(_openSub.Subscribe(_ => OpenPanel()));
+            _subscriptions.Add(_closeSub.Subscribe(_ => ClosePanel()));
+        }
+
         private void OnDestroy()
         {
-            if (!_disposed) Dispose();
+            Dispose();
         }
 
         #endregion
@@ -119,7 +120,6 @@ namespace Game.UI
 
         private void Update()
         {
-            
             if (_disposed || !_panelOpen) return;
 
             float y = _inputManager.Movement.y;
@@ -208,8 +208,6 @@ namespace Game.UI
 
         private void OpenPanel()
         {
-             Debug.Log("[Options] OpenPanel called, _panelOpen=" + _panelOpen);  // ← ADD
-   
             if (_disposed || _panelOpen) return;
             _panelOpen = true;
             ResetState();
@@ -231,9 +229,6 @@ namespace Game.UI
         private void SetVisualActive(bool active)
         {
             _panelContent.SetActive(active);
-           // _categoryListPanel.SetActive(active);
-           // for (int i = 0; i < _categoryTexts.Length; i++)
-           //     _categoryTexts[i].gameObject.SetActive(active);
         }
 
         private void ResetState()
@@ -255,8 +250,8 @@ namespace Game.UI
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var d in _subscriptions)
-                d?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 

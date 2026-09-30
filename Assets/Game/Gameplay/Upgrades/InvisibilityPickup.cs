@@ -1,6 +1,7 @@
 using UnityEngine;
 using Game.Core.Messages;
 using MessagePipe;
+using VContainer;
 
 namespace Game.Gameplay.Upgrades
 {
@@ -11,9 +12,10 @@ namespace Game.Gameplay.Upgrades
 
         private IPublisher<UpgradePickedUp> _publisher;
 
-        private void Awake()
+        [Inject]
+        private void Inject(IPublisher<UpgradePickedUp> publisher)
         {
-            _publisher = GlobalMessagePipe.GetPublisher<UpgradePickedUp>();
+            _publisher = publisher;
         }
 
         private void OnTriggerEnter2D(Collider2D collision)

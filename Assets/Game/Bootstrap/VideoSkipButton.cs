@@ -20,9 +20,8 @@ namespace Game.Bootstrap
     {
         #region Dependencies
 
-        [Inject] private InputManager _inputManager;
-        [Inject] private SaveManager _saveManager;
-
+        private InputManager _inputManager;
+        private SaveManager _saveManager;
         private ISubscriber<GameStateChanged> _stateSub;
         private ISubscriber<VideoFinished> _finishedSub;
         private IPublisher<VideoSkipRequested> _skipPublisher;
@@ -50,6 +49,25 @@ namespace Game.Bootstrap
 
         #endregion
 
+        #region Construction
+
+        [Inject]
+        private void Construct(
+            InputManager inputManager,
+            SaveManager saveManager,
+            ISubscriber<GameStateChanged> stateSub,
+            ISubscriber<VideoFinished> finishedSub,
+            IPublisher<VideoSkipRequested> skipPublisher)
+        {
+            _inputManager = inputManager;
+            _saveManager = saveManager;
+            _stateSub = stateSub;
+            _finishedSub = finishedSub;
+            _skipPublisher = skipPublisher;
+        }
+
+        #endregion
+
         #region Unity Lifecycle
 
         private void Awake()
@@ -65,10 +83,6 @@ namespace Game.Bootstrap
 
         private void Start()
         {
-            _stateSub = GlobalMessagePipe.GetSubscriber<GameStateChanged>();
-            _finishedSub = GlobalMessagePipe.GetSubscriber<VideoFinished>();
-            _skipPublisher = GlobalMessagePipe.GetPublisher<VideoSkipRequested>();
-
             _subscriptions.Add(_stateSub.Subscribe(OnStateChanged));
             _subscriptions.Add(_finishedSub.Subscribe(_ => Hide()));
         }
@@ -77,7 +91,6 @@ namespace Game.Bootstrap
         {
             if (!_isVisible || _disposed) return;
 
-            // Blink cursor
             _blinkTimer += Time.unscaledDeltaTime;
             if (_blinkTimer >= _blinkInterval)
             {
@@ -86,7 +99,6 @@ namespace Game.Bootstrap
                 UpdateText();
             }
 
-            // Execute on Confirm
             if (_inputManager.ConfirmWasPressed)
                 Skip();
         }
@@ -100,7 +112,6 @@ namespace Game.Bootstrap
             if (_disposed) return;
 
             bool shouldShow = msg.State == GameState.IntroVideo
-                              && _saveManager != null
                               && _saveManager.HasSave;
 
             if (shouldShow) Show();

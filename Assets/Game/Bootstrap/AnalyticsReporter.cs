@@ -4,7 +4,6 @@ using Game.Core.Enums;
 using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Bootstrap
@@ -19,22 +18,21 @@ namespace Game.Bootstrap
 
         private readonly IAnalyticsReporter _reporter;
         private readonly GameStateMachine _stateMachine;
-
-        private ISubscriber<GameStateChanged> _stateSub;
-        private ISubscriber<SceneTransitionStarted> _transStartSub;
-        private ISubscriber<SceneTransitionCompleted> _transCompleteSub;
-        private ISubscriber<SaveCompleted> _saveCompleteSub;
-        private ISubscriber<SaveFailed> _saveFailedSub;
-        private ISubscriber<LoadFailed> _loadFailedSub;
-        private ISubscriber<PlayerDied> _diedSub;
-        private ISubscriber<VideoFinished> _videoFinishedSub;
-        private ISubscriber<VideoSkipRequested> _videoSkipSub;
+        private readonly ISubscriber<GameStateChanged> _stateSub;
+        private readonly ISubscriber<SceneTransitionStarted> _transStartSub;
+        private readonly ISubscriber<SceneTransitionCompleted> _transCompleteSub;
+        private readonly ISubscriber<SaveCompleted> _saveCompleteSub;
+        private readonly ISubscriber<SaveFailed> _saveFailedSub;
+        private readonly ISubscriber<LoadFailed> _loadFailedSub;
+        private readonly ISubscriber<PlayerDied> _diedSub;
+        private readonly ISubscriber<VideoFinished> _videoFinishedSub;
+        private readonly ISubscriber<VideoSkipRequested> _videoSkipSub;
 
         #endregion
 
         #region State
 
-        private readonly List<IDisposable> _subscriptions = new();
+        private readonly List<IDisposable> _subscriptions = new(9);
         private GameState _lastState = GameState.MainMenu;
         private int _transitionStartTimeMs;
         private bool _videoWasSkipped;
@@ -44,11 +42,30 @@ namespace Game.Bootstrap
 
         #region Construction
 
-        [Inject]
-        public AnalyticsReporter(IAnalyticsReporter reporter, GameStateMachine stateMachine)
+        public AnalyticsReporter(
+            IAnalyticsReporter reporter,
+            GameStateMachine stateMachine,
+            ISubscriber<GameStateChanged> stateSub,
+            ISubscriber<SceneTransitionStarted> transStartSub,
+            ISubscriber<SceneTransitionCompleted> transCompleteSub,
+            ISubscriber<SaveCompleted> saveCompleteSub,
+            ISubscriber<SaveFailed> saveFailedSub,
+            ISubscriber<LoadFailed> loadFailedSub,
+            ISubscriber<PlayerDied> diedSub,
+            ISubscriber<VideoFinished> videoFinishedSub,
+            ISubscriber<VideoSkipRequested> videoSkipSub)
         {
             _reporter = reporter;
             _stateMachine = stateMachine;
+            _stateSub = stateSub;
+            _transStartSub = transStartSub;
+            _transCompleteSub = transCompleteSub;
+            _saveCompleteSub = saveCompleteSub;
+            _saveFailedSub = saveFailedSub;
+            _loadFailedSub = loadFailedSub;
+            _diedSub = diedSub;
+            _videoFinishedSub = videoFinishedSub;
+            _videoSkipSub = videoSkipSub;
         }
 
         #endregion
@@ -58,16 +75,6 @@ namespace Game.Bootstrap
         void IStartable.Start()
         {
             _lastState = _stateMachine.CurrentState;
-
-            _stateSub = GlobalMessagePipe.GetSubscriber<GameStateChanged>();
-            _transStartSub = GlobalMessagePipe.GetSubscriber<SceneTransitionStarted>();
-            _transCompleteSub = GlobalMessagePipe.GetSubscriber<SceneTransitionCompleted>();
-            _saveCompleteSub = GlobalMessagePipe.GetSubscriber<SaveCompleted>();
-            _saveFailedSub = GlobalMessagePipe.GetSubscriber<SaveFailed>();
-            _loadFailedSub = GlobalMessagePipe.GetSubscriber<LoadFailed>();
-            _diedSub = GlobalMessagePipe.GetSubscriber<PlayerDied>();
-            _videoFinishedSub = GlobalMessagePipe.GetSubscriber<VideoFinished>();
-            _videoSkipSub = GlobalMessagePipe.GetSubscriber<VideoSkipRequested>();
 
             _subscriptions.Add(_stateSub.Subscribe(OnStateChanged));
             _subscriptions.Add(_transStartSub.Subscribe(OnTransitionStarted));
@@ -161,8 +168,8 @@ namespace Game.Bootstrap
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 

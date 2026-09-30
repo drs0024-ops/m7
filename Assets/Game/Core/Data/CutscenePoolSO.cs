@@ -37,7 +37,8 @@ namespace Game.Core.Data
             if (perLevel == null) return null;
             for (int i = 0; i < perLevel.Count; i++)
             {
-                if (perLevel[i].levelName == levelName
+                if (perLevel[i] != null
+                    && perLevel[i].levelName == levelName
                     && perLevel[i].pool != null
                     && perLevel[i].pool.Length > 0)
                 {
@@ -45,6 +46,6 @@ namespace Game.Core.Data
                 }
             }
             return null;
-        }
+        }   
     }
 }   

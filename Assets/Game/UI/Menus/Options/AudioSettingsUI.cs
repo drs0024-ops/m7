@@ -24,20 +24,19 @@ namespace Game.UI
         [Header("Defaults")]
         [SerializeField] private float[] _defaultValues = { 1f, 0.7f, 1f };
 
-        [Header("Dependencies")]
-        [Inject] private InputManager _inputManager;
-        [Inject] private IAudioMixer _mixer;
-        [Inject] private SettingsSavable _settings;
-
         [Header("Settings")]
         [SerializeField] private AudioRow[] _rows;
         [SerializeField] private int _barCharCount = 20;
         [SerializeField] private float _step = 0.05f;
-        private float _blinkTimer;
-        private bool _cursorVisible = true;
         [SerializeField] private float _blinkInterval = 0.5f;
 
+        private InputManager _inputManager;
+        private IAudioMixer _mixer;
         private IPublisher<SaveRequest> _savePublisher;
+        private IObjectResolver _container;
+
+        private float _blinkTimer;
+        private bool _cursorVisible = true;
 
         private int _selectedRow;
         private float[] _values;
@@ -50,9 +49,16 @@ namespace Game.UI
         #region Injection
 
         [Inject]
-        public void Construct(IPublisher<SaveRequest> savePublisher)
+        private void Construct(
+            InputManager inputManager,
+            IAudioMixer mixer,
+            IPublisher<SaveRequest> savePublisher,
+            IObjectResolver container)
         {
+            _inputManager = inputManager;
+            _mixer = mixer;
             _savePublisher = savePublisher;
+            _container = container;
         }
 
         #endregion
@@ -69,8 +75,7 @@ namespace Game.UI
 
             _values = new float[_rows.Length];
             for (int i = 0; i < _values.Length; i++)
-
-            _values[i] = i < _defaultValues.Length ? _defaultValues[i] : 0f;
+                _values[i] = i < _defaultValues.Length ? _defaultValues[i] : 0f;
             _selectedRow = 0;
         }
 
@@ -90,9 +95,7 @@ namespace Game.UI
         private void OnDisable()
         {
             _enabled = false;
-            if (_enabled)
-                _savePublisher.Publish(new SaveRequest("AudioSettings", false));
-            _enabled = false;
+            _savePublisher.Publish(new SaveRequest("AudioSettings", false));
         }
 
         private void Update()
@@ -107,13 +110,11 @@ namespace Game.UI
             bool left = x < -0.5f;
             bool right = x > 0.5f;
 
-            // Row navigation (edge-detected)
             if (up && !_upHeld)
                 SelectRow(_selectedRow - 1);
             else if (down && !_downHeld)
                 SelectRow(_selectedRow + 1);
 
-            // Value adjustment (continuous while held)
             if (left)
                 AdjustValue(-_step);
             if (right)
@@ -124,7 +125,6 @@ namespace Game.UI
             _leftHeld = left;
             _rightHeld = right;
 
-            // Blink cursor
             _blinkTimer += Time.unscaledDeltaTime;
             if (_blinkTimer >= _blinkInterval)
             {
@@ -133,20 +133,21 @@ namespace Game.UI
                 UpdateBar(_selectedRow);
             }
 
-            // Save (Enter)
             if (_inputManager.ConfirmWasPressed)
                 Save();
-        }   
+        }
 
         #endregion
 
         #region Save
+
         private void Save()
         {
             _savePublisher.Publish(new SaveRequest("AudioSettings", false));
-            Debug.Log("[AudioSettings] Saved.");
         }
-                #endregion
+
+        #endregion
+
         #region Input Actions
 
         private void SelectRow(int index)
@@ -156,8 +157,8 @@ namespace Game.UI
 
             if (prev != _selectedRow)
             {
-                UpdateBar(prev);       // ← remove cursor from old row
-                UpdateBar(_selectedRow); // ← add cursor to new row
+                UpdateBar(prev);
+                UpdateBar(_selectedRow);
             }
         }
 
@@ -166,8 +167,10 @@ namespace Game.UI
             _values[_selectedRow] = Mathf.Clamp01(_values[_selectedRow] + delta);
             UpdateBar(_selectedRow);
             ApplyToMixer();
-            _settings.SetAudio(_values[0], _values[1], _values[2]);
-        }
+
+            _container.Resolve<SettingsSavable>()
+                .SetAudio(_values[0], _values[1], _values[2]);
+        }   
 
         #endregion
 
@@ -188,21 +191,12 @@ namespace Game.UI
 
             for (int i = 0; i < _rows.Length; i++)
                 UpdateBar(i);
-
-            //UpdateCursor(); // depreciated 9/13/26, moved to the end of value text
         }
 
         #endregion
 
         #region UI
 
-        /* Depreciated 9/13/2026
-        private void UpdateCursor()
-        {
-            for (int i = 0; i < _rows.Length; i++)
-                _rows[i].cursorText.text = (i == _selectedRow) ? ">" : " ";
-        }
-        */
         private void UpdateBar(int row)
         {
             int filled = Mathf.RoundToInt(_values[row] * _barCharCount);
@@ -211,9 +205,8 @@ namespace Game.UI
 
             string val = Mathf.RoundToInt(_values[row] * 100f).ToString("D2");
             _rows[row].valueText.text = (row == _selectedRow && _cursorVisible) ? $"{val} █" : val;
-        }   
+        }
 
         #endregion
-
     }
 }   

@@ -6,20 +6,17 @@ using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
 using VContainer;
-using VContainer.Unity;
 
 namespace Game.Gameplay.World
 {
-    public class CheckpointManager : MonoBehaviour, IStartable, ISaveable, IDisposable
+    public class CheckpointManager : MonoBehaviour, ISaveable, IDisposable
     {
-        // readonly — scene-placed component, injected during scope build
-        // (SetProvider has already fired by this point)
-        private readonly ISubscriber<CheckpointReached> _checkpointReachedSub;
-        private readonly IPublisher<SaveRequest> _saveRequestPublisher;
-        private readonly IPublisher<PlayerSpawnRequest> _playerSpawnRequestPublisher;
+        private ISubscriber<CheckpointReached> _checkpointReachedSub;
+        private IPublisher<SaveRequest> _saveRequestPublisher;
+        private IPublisher<PlayerSpawnRequest> _playerSpawnRequestPublisher;
 
         private readonly List<IDisposable> _disposables = new();
-        private readonly ISaveableRegistry _registry;
+        private ISaveableRegistry _registry;
 
         [SerializeField] private ICheckpoint[] _checkpoints;
         [SerializeField] private Transform _startSpawnPoint;
@@ -28,18 +25,22 @@ namespace Game.Gameplay.World
         private string _lastCheckpointId;
         private bool _disposed;
 
-        public string SaveId => throw new NotImplementedException();
+        public string SaveId => "CheckpointManager";
 
         [Inject]
-        public CheckpointManager(ISaveableRegistry registry)
+        public void Construct(
+            ISaveableRegistry registry,
+            ISubscriber<CheckpointReached> checkpointReachedSub,
+            IPublisher<SaveRequest> saveRequestPublisher,
+            IPublisher<PlayerSpawnRequest> playerSpawnRequestPublisher)
         {
-            _checkpointReachedSub = GlobalMessagePipe.GetSubscriber<CheckpointReached>();
-            _saveRequestPublisher = GlobalMessagePipe.GetPublisher<SaveRequest>();
-            _playerSpawnRequestPublisher = GlobalMessagePipe.GetPublisher<PlayerSpawnRequest>();
             _registry = registry;
+            _checkpointReachedSub = checkpointReachedSub;
+            _saveRequestPublisher = saveRequestPublisher;
+            _playerSpawnRequestPublisher = playerSpawnRequestPublisher;
         }
 
-        void IStartable.Start()
+        private void Start()
         {
             _registry.Register(this);
 
@@ -50,7 +51,6 @@ namespace Game.Gameplay.World
                 for (int i = 0; i < _checkpoints.Length; i++)
                     _checkpoints[i].ResetState();
 
-                // Defer visual activation here — scene is loaded, checkpoints exist
                 if (!string.IsNullOrEmpty(_lastCheckpointId))
                 {
                     for (int i = 0; i < _checkpoints.Length; i++)
@@ -104,8 +104,6 @@ namespace Game.Gameplay.World
             {
                 _lastCheckpointId = saveData.CheckpointId;
                 _lastCheckpointPosition = saveData.Position;
-                // Do NOT Activate() here — scene isn't loaded yet.
-                // IStartable.Start() handles visual activation.
             }
             else
             {
@@ -162,9 +160,8 @@ namespace Game.Gameplay.World
             if (_disposed) return;
             _disposed = true;
 
-            _registry.Unregister(this);
-
-            foreach (var d in _disposables) d?.Dispose();
+            for (int i = 0; i < _disposables.Count; i++)
+                _disposables[i]?.Dispose();
             _disposables.Clear();
         }
 
@@ -175,5 +172,4 @@ namespace Game.Gameplay.World
 
         #endregion
     }
-
-}
+}   

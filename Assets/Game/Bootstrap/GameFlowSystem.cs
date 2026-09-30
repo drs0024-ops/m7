@@ -9,7 +9,6 @@ using Game.Core.Messages;
 using Game.Gameplay.Save;
 using MessagePipe;
 using UnityEngine;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Bootstrap
@@ -27,27 +26,26 @@ namespace Game.Bootstrap
         private readonly GamePhaseController _phaseController;
         private readonly IInputSwitcher _inputSwitcher;
         private readonly GameFlowConfig _config;
-        private readonly LevelLoader _levelLoader;
+        private readonly LevelProgressionManager _levelProgression;
         private readonly SaveManager _saveManager;
         private readonly SceneRegistry _sceneRegistry;
         private readonly CutsceneSelector _cutsceneSelector;
         private readonly CutscenePlayer _cutscenePlayer;
-
-        private IPublisher<NavigateToMenu> _navigateToMenuPublisher;
-        private ISubscriber<StartGameRequested> _startSub;
-        private ISubscriber<PauseGameRequested> _pauseSub;
-        private ISubscriber<ResumeGameRequested> _resumeSub;
-        private ISubscriber<LoadRequest> _loadSub;
-        private ISubscriber<VideoFinished> _videoFinishedSub;
-        private ISubscriber<PlayerDied> _diedSub;
-        private ISubscriber<ClimaxTriggered> _climaxSub;
-        private ISubscriber<ClimaxCompleted> _climaxCompletedSub;
+        private readonly IPublisher<NavigateToMenu> _navigateToMenuPublisher;
+        private readonly ISubscriber<StartGameRequested> _startSub;
+        private readonly ISubscriber<PauseGameRequested> _pauseSub;
+        private readonly ISubscriber<ResumeGameRequested> _resumeSub;
+        private readonly ISubscriber<LoadRequest> _loadSub;
+        private readonly ISubscriber<VideoFinished> _videoFinishedSub;
+        private readonly ISubscriber<PlayerDied> _diedSub;
+        private readonly ISubscriber<ClimaxTriggered> _climaxSub;
+        private readonly ISubscriber<ClimaxCompleted> _climaxCompletedSub;
 
         #endregion
 
         #region State
 
-        private readonly List<IDisposable> _subscriptions = new();
+        private readonly List<IDisposable> _subscriptions = new(8);
         private CancellationTokenSource _cts;
         private bool _disposed;
 
@@ -55,27 +53,44 @@ namespace Game.Bootstrap
 
         #region Construction
 
-        [Inject]
         public GameFlowSystem(
             GameStateMachine stateMachine,
             GamePhaseController phaseController,
             IInputSwitcher inputSwitcher,
             GameFlowConfig config,
-            LevelLoader levelLoader,
+            LevelProgressionManager levelProgression,
             SaveManager saveManager,
             SceneRegistry sceneRegistry,
             CutsceneSelector cutsceneSelector,
-            CutscenePlayer cutscenePlayer)
+            CutscenePlayer cutscenePlayer,
+            IPublisher<NavigateToMenu> navigateToMenuPublisher,
+            ISubscriber<StartGameRequested> startSub,
+            ISubscriber<PauseGameRequested> pauseSub,
+            ISubscriber<ResumeGameRequested> resumeSub,
+            ISubscriber<LoadRequest> loadSub,
+            ISubscriber<VideoFinished> videoFinishedSub,
+            ISubscriber<PlayerDied> diedSub,
+            ISubscriber<ClimaxTriggered> climaxSub,
+            ISubscriber<ClimaxCompleted> climaxCompletedSub)
         {
             _stateMachine = stateMachine;
             _phaseController = phaseController;
             _inputSwitcher = inputSwitcher;
             _config = config;
-            _levelLoader = levelLoader;
+            _levelProgression = levelProgression;
             _saveManager = saveManager;
             _sceneRegistry = sceneRegistry;
             _cutsceneSelector = cutsceneSelector;
             _cutscenePlayer = cutscenePlayer;
+            _navigateToMenuPublisher = navigateToMenuPublisher;
+            _startSub = startSub;
+            _pauseSub = pauseSub;
+            _resumeSub = resumeSub;
+            _loadSub = loadSub;
+            _videoFinishedSub = videoFinishedSub;
+            _diedSub = diedSub;
+            _climaxSub = climaxSub;
+            _climaxCompletedSub = climaxCompletedSub;
         }
 
         #endregion
@@ -85,16 +100,6 @@ namespace Game.Bootstrap
         void IStartable.Start()
         {
             _cts = new CancellationTokenSource();
-
-            _navigateToMenuPublisher = GlobalMessagePipe.GetPublisher<NavigateToMenu>();
-            _startSub = GlobalMessagePipe.GetSubscriber<StartGameRequested>();
-            _pauseSub = GlobalMessagePipe.GetSubscriber<PauseGameRequested>();
-            _resumeSub = GlobalMessagePipe.GetSubscriber<ResumeGameRequested>();
-            _loadSub = GlobalMessagePipe.GetSubscriber<LoadRequest>();
-            _videoFinishedSub = GlobalMessagePipe.GetSubscriber<VideoFinished>();
-            _diedSub = GlobalMessagePipe.GetSubscriber<PlayerDied>();
-            _climaxSub = GlobalMessagePipe.GetSubscriber<ClimaxTriggered>();
-            _climaxCompletedSub = GlobalMessagePipe.GetSubscriber<ClimaxCompleted>();
 
             _subscriptions.Add(_startSub.Subscribe(_ => OnStartGameAsync().Forget()));
             _subscriptions.Add(_pauseSub.Subscribe(_ => OnPause()));
@@ -121,7 +126,7 @@ namespace Game.Bootstrap
         {
             await ExecuteTransition(GameState.Gameplay, GamePhase.Gameplay, async () =>
             {
-                await _levelLoader.LoadLevelAsync(_sceneRegistry.FirstLevelScene, null);
+                await _levelProgression.StartLevel(0);
 
                 var cutscene = _cutsceneSelector.GetForNewGame();
                 if (cutscene != null)
@@ -159,7 +164,7 @@ namespace Game.Bootstrap
 
             await ExecuteTransition(GameState.Gameplay, GamePhase.Gameplay, async () =>
             {
-                await _levelLoader.LoadLevelAsync(levelName, null);
+                await _levelProgression.StartLevelByName(levelName);
 
                 var cutscene = _cutsceneSelector.GetForLoad(levelName);
                 if (cutscene != null)
@@ -172,6 +177,10 @@ namespace Game.Bootstrap
 
         private void OnVideoFinished()
         {
+            // FIX #73: Only transition to MainMenu if we're actually in the IntroVideo state.
+            // Prevents spurious MainMenu loads when a gameplay cutscene finishes.
+            if (!_stateMachine.IsInState(GameState.IntroVideo)) return;
+
             ExecuteTransition(GameState.MainMenu, GamePhase.Menu, () => UniTask.CompletedTask).Forget();
         }
 
@@ -268,8 +277,8 @@ namespace Game.Bootstrap
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
 
             _cts?.Cancel();

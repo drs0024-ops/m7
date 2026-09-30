@@ -1,16 +1,19 @@
-using UnityEngine;
 using Game.Gameplay.Camera;
-/// <summary>
-/// Request to trigger a screen shake effect.
-/// </summary>
-public readonly struct CameraShakeRequest
-{
-    public readonly float ForceMultiplier;
-    public readonly ScreenShakeProfile Profile;
 
-    public CameraShakeRequest(float forceMultiplier, ScreenShakeProfile profile)
+namespace Game.Core.Messages
+{
+    /// <summary>
+    /// Requests a camera shake. Uses a profile for shape/duration, or a flat force multiplier.
+    /// </summary>
+    public readonly struct CameraShakeRequest
     {
-        ForceMultiplier = forceMultiplier;
-        Profile = profile;
+        public readonly ScreenShakeProfile Profile;
+        public readonly float ForceMultiplier;
+
+        public CameraShakeRequest(ScreenShakeProfile profile, float forceMultiplier = 1f)
+        {
+            Profile = profile;
+            ForceMultiplier = forceMultiplier;
+        }
     }
-}
+}   

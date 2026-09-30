@@ -8,20 +8,11 @@
         "VContainer",
         "UniTask",
         "Unity.Cinemachine",
-        "LeanTween",
         "Unity.TextMeshPro",
         "Unity.InputSystem",
-        "Unity.RenderPipelines.Universal.2D.Runtime"
+        "Unity.RenderPipelines.Universal.2D.Runtime",
+        "LeanTween"
     ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": true,
-    "precompiledReferences": [
-        ""
-    ],
-    "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
-}
+    "autoReferenced": false,
+    "overrideReferences": true
+}   

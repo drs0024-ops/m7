@@ -1,36 +1,43 @@
-// Tracks current objective and achievement progress. Silent — no HUD feedback.
 using System;
-using System.Collections.Generic;
 using Game.Core.Data;
 using Game.Core.Messages;
 using MessagePipe;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Gameplay.Achievements
 {
+    /// <summary>
+    /// Tracks current objective and achievement progress. Silent — no HUD feedback.
+    /// </summary>
     public class ObjectiveTracker : IStartable, IDisposable
     {
-        // NOT readonly — deferred pattern  
-        private IPublisher<AchievementUnlocked> _achievementUnlockedPublisher;
-        private IPublisher<NextAchievementRevealed> _nextAchievementRevealedPublisher;
-        private readonly List<IDisposable> _subscriptions = new();
+        #region Dependencies
+
+        private readonly IPublisher<AchievementUnlocked> _achievementUnlockedPublisher;
+        private readonly IPublisher<NextAchievementRevealed> _nextAchievementRevealedPublisher;
+
+        #endregion
+
+        #region State
 
         private Objective _currentObjective;
         private bool _disposed;
 
+        #endregion
+
+        #region Public API
+
         public bool IsComplete => _currentObjective == null || _currentObjective.IsComplete;
-        public Achievement CurrentAchievement => _currentObjective?.Current ?? default;   
+        public Achievement CurrentAchievement => _currentObjective?.Current ?? default;
         public int Progress => _currentObjective?.currentAchievementIndex ?? 0;
         public int Total => _currentObjective?.achievements?.Count ?? 0;
 
-        [Inject]
-        public ObjectiveTracker() { }
-
-        void IStartable.Start()
+        public ObjectiveTracker(
+            IPublisher<AchievementUnlocked> achievementUnlockedPublisher,
+            IPublisher<NextAchievementRevealed> nextAchievementRevealedPublisher)
         {
-            _achievementUnlockedPublisher = GlobalMessagePipe.GetPublisher<AchievementUnlocked>();
-            _nextAchievementRevealedPublisher = GlobalMessagePipe.GetPublisher<NextAchievementRevealed>();
+            _achievementUnlockedPublisher = achievementUnlockedPublisher;
+            _nextAchievementRevealedPublisher = nextAchievementRevealedPublisher;
         }
 
         public void SetObjective(Objective objective)
@@ -53,13 +60,24 @@ namespace Game.Gameplay.Achievements
                 _nextAchievementRevealedPublisher.Publish(new NextAchievementRevealed(_currentObjective.Current));
         }
 
+        #endregion
+
+        #region IStartable
+
+        void IStartable.Start()
+        {
+            // No-op — publishers are already injected.
+        }
+
+        #endregion
+
+        #region IDisposable
+
         public void Dispose()
         {
-            if (_disposed) return;
             _disposed = true;
-
-            foreach (var d in _subscriptions) d?.Dispose();
-            _subscriptions.Clear();
         }
+
+        #endregion
     }
 }   

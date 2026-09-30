@@ -1,149 +1,223 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using UnityEngine;
+using Game.Gameplay.Player;
 using VContainer;
 using VContainer.Unity;
+using UnityEngine;
 using Game.Gameplay.Camera;
-using Game.Gameplay.Player;
 using Game.Gameplay.Upgrades;
 using Game.Gameplay.World;
+using Unity.Cinemachine;
 using Game.Core.Enums;
-using Game.UI;
 
 namespace Game.Bootstrap.Scopes
 {
+    [DefaultExecutionOrder(-100)]
     public class FacilitySceneLifetimeScope : LifetimeScope
     {
+        #region Serialized Fields
+
+        [Header("Player")]
+        [SerializeField] private GameObject _playerPrefab;
         [SerializeField] private Transform _startSpawnPoint;
         [SerializeField] private Vector3 _defaultStartPosition;
-        [SerializeField] private UpgradePickup _upgradePickup1;
+
+        [Header("Checkpoints")]
         [SerializeField] private CheckpointManager _checkpointManager;
+
+        [Header("Camera")]
         [SerializeField] private SceneCameraSetup _sceneCameraSetup;
         [SerializeField] private CameraFollowObject _cameraFollowObject;
-        [SerializeField] private CameraConfigSO _cameraConfig;
+        [SerializeField] private CameraConfig _cameraConfig;
+        [SerializeField] private CinemachineImpulseSource _impulseSource;
 
-        [Header("Pause Menu")]
-        [SerializeField] private PauseManager pauseManager;
-        [SerializeField] private PauseMenuTabs pauseMenuTabs;
-        //[SerializeField] private ObjectivesManager objectivesManager;
-        [SerializeField] private PauseButton pauseButton;
+        [Header("Invisibility")]
+        [SerializeField] private InvisibilityVisualPresenter _invisibilityVisualPresenter;
+        [SerializeField] private InvisibilityPickup _invisibilityPickup;
+
+        [Header("Bombs")]
+        [SerializeField] private GameObject _bombPrefab;
+
+        #endregion
+
+        #region Configure
 
         protected override void Configure(IContainerBuilder builder)
         {
-            // --- Checkpoints ---
-            var checkpoints = FindObjectsByType<Checkpoint>(FindObjectsSortMode.None).ToList();
+            ConfigureCheckpoints(builder);
+            ConfigureSpawnPoint(builder);
+            ConfigureTriggers(builder);
+            ConfigureCamera(builder);
+            ConfigureInvisibility(builder);
+            ConfigurePlayer(builder);
+            ConfigureBomb(builder);
+            ConfigureSceneConfig(builder);
+            ConfigureEntryPoints(builder);
+            ConfigureBuildCallbacks(builder);
+            ConfigureOrbCounter(builder);
+
+#if UNITY_EDITOR
+            builder.RegisterComponentInHierarchy<SceneViewDriverDisabler>();
+#endif
+        }
+
+        private void ConfigureOrbCounter(IContainerBuilder builder)
+        {
+            builder.Register<OrbCounter>(Lifetime.Scoped);
+        }
+
+        private void ConfigureCheckpoints(IContainerBuilder builder)
+        {
+            var currentScene = gameObject.scene;
+            var all = FindObjectsByType<Checkpoint>(FindObjectsSortMode.None);
+
+            var checkpoints = new List<Checkpoint>(all.Length);
+            for (int i = 0; i < all.Length; i++)
+                if (all[i].gameObject.scene == currentScene)
+                    checkpoints.Add(all[i]);
 
             if (checkpoints.Count == 0)
-                Debug.LogWarning("[FacilitySceneScope] No Checkpoints found in scene.");
-            else
-            {
-                builder.RegisterBuildCallback(container =>
-                {
-                    for (int i = 0; i < checkpoints.Count; i++)
-                        container.Inject(checkpoints[i]);
-                });
-            }
+                Debug.LogWarning($"[FacilitySceneScope] No Checkpoints found in '{currentScene.name}'.");
 
             builder.RegisterInstance(checkpoints).As<IReadOnlyList<Checkpoint>>();
 
-            if (_checkpointManager != null)
+            builder.RegisterBuildCallback(resolver =>
             {
-                builder.RegisterComponent(_checkpointManager)
-                    .AsSelf()
-                    .AsImplementedInterfaces();
-            }
-            else
-            {
-                builder.RegisterComponentInHierarchy<CheckpointManager>()
-                    .AsSelf()
-                    .AsImplementedInterfaces();
-            }
+                for (int i = 0; i < checkpoints.Count; i++)
+                    resolver.Inject(checkpoints[i]);
+            });
 
-            // --- Spawn Point ---
+            if (_checkpointManager != null)
+                builder.RegisterComponent(_checkpointManager);
+            else
+                builder.RegisterComponentInHierarchy<CheckpointManager>();
+        }
+
+        private void ConfigureSpawnPoint(IContainerBuilder builder)
+        {
             if (_startSpawnPoint == null)
             {
                 var fallback = new GameObject("DefaultStartSpawn");
+                fallback.transform.SetParent(transform, false);
                 fallback.transform.position = _defaultStartPosition;
                 _startSpawnPoint = fallback.transform;
             }
 
             builder.RegisterInstance(_startSpawnPoint).Keyed(SpawnKeys.StartSpawn);
+        }
 
-            // --- Triggers / Interactables ---
-            var triggers = FindObjectsByType<TriggerInteractionBase>(FindObjectsSortMode.None).ToList();
+        private void ConfigureTriggers(IContainerBuilder builder)
+        {
+            var currentScene = gameObject.scene;
+            var allTriggers = FindObjectsByType<TriggerInteractionBase>(FindObjectsSortMode.None);
 
-            if (triggers.Count > 0)
+            var triggers = new List<TriggerInteractionBase>(allTriggers.Length);
+            for (int i = 0; i < allTriggers.Length; i++)
             {
-                builder.RegisterBuildCallback(container =>
-                {
-                    for (int i = 0; i < triggers.Count; i++)
-                    {
-                        if (triggers[i] != null)
-                            container.Inject(triggers[i]);
-                    }
-                });
+                if (allTriggers[i].gameObject.scene == currentScene)
+                    triggers.Add(allTriggers[i]);
             }
 
             builder.RegisterInstance(triggers).As<IReadOnlyList<TriggerInteractionBase>>();
 
-            // --- Upgrade Pickups ---
-            if (_upgradePickup1 != null)
-                builder.RegisterComponent(_upgradePickup1);
+            builder.RegisterBuildCallback(resolver =>
+            {
+                for (int i = 0; i < triggers.Count; i++)
+                    resolver.Inject(triggers[i]);
+            });
+        }
 
-            // --- Camera System ---
-            if (_sceneCameraSetup != null)
-                builder.RegisterComponent(_sceneCameraSetup);
-
-            if (_cameraFollowObject != null)
-                builder.RegisterComponent(_cameraFollowObject);
+        private void ConfigureCamera(IContainerBuilder builder)
+        {
+            builder.RegisterComponent(_sceneCameraSetup);
+            builder.RegisterComponent(_cameraFollowObject);
 
             if (_cameraConfig == null)
-            {
-                Debug.LogError("[FacilitySceneScope] CameraConfigSO not assigned!");
-                return;
-            }
+                throw new InvalidOperationException(
+                    $"[FacilitySceneScope] CameraConfig not assigned on '{gameObject.name}'.");
 
-            builder.RegisterInstance(_cameraConfig);
+            builder.RegisterComponent(_cameraConfig);
+            builder.RegisterComponent(_impulseSource);
+
             builder.Register<CameraTargetManager>(Lifetime.Scoped);
             builder.Register<CameraSwitcher>(Lifetime.Scoped);
-
-            // =====================================================
-            // MONOBEHAVIOUR COMPONENTS
-            // =====================================================
             builder.RegisterComponentInHierarchy<CameraEffectController>();
             builder.RegisterComponentInHierarchy<CameraPanMover>();
+        }
 
-            // -- Pause Menu Components --
-            if (pauseManager != null)      builder.RegisterComponent(pauseManager);
-            if (pauseMenuTabs != null)     builder.RegisterComponent(pauseMenuTabs);
-            //if (objectivesManager != null) builder.RegisterComponent(objectivesManager);
-            if (pauseButton != null)       builder.RegisterComponent(pauseButton);
+        private void ConfigureInvisibility(IContainerBuilder builder)
+        {
+            builder.RegisterComponentInHierarchy<InvisibilityController>();
+            builder.RegisterComponentInHierarchy<InvisibilityInputHandler>();
 
-            builder.Register<CameraSystem>(Lifetime.Scoped)
-                .As<IInitializable>()
-                .As<IDisposable>();
-
-            // --- Scene Config ---
-            builder.RegisterInstance(new CharacterSceneConfig
+            // FIX #31: Use the serialized scene component only.
+            // Previously this class registered BOTH the serialized field AND a new
+            // RegisterComponentInHierarchy, creating a duplicate instance.
+            if (_invisibilityVisualPresenter != null)
+                builder.RegisterComponent(_invisibilityVisualPresenter);
+            else
             {
-                SpawnPlayerOnStart = true,
-                DefaultStartPosition = _startSpawnPoint.position
-            });
+                Debug.LogWarning($"[FacilitySceneScope] InvisibilityVisualPresenter not assigned. Registering in hierarchy as fallback.");
+                builder.RegisterComponentInHierarchy<InvisibilityVisualPresenter>();
+            }
 
-            // --- Player ---
+            if (_invisibilityPickup != null)
+                builder.RegisterComponent(_invisibilityPickup);
+            else
+                Debug.LogWarning($"[FacilitySceneScope] InvisibilityPickup not assigned on '{gameObject.name}'.");
+        }
+
+        private void ConfigurePlayer(IContainerBuilder builder)
+        {
+            if (_playerPrefab == null)
+                throw new InvalidOperationException(
+                    $"[FacilitySceneScope] Player prefab not assigned on '{gameObject.name}'.");
+
+            builder.RegisterInstance(_playerPrefab).Keyed("PlayerPrefab");
+            builder.Register<IPlayerFactory, PlayerFactory>(Lifetime.Scoped);
+
             builder.Register<PlayerDependencies>(Lifetime.Scoped);
             builder.Register<PlayerContext>(Lifetime.Scoped);
             builder.Register<PlayerController>(Lifetime.Scoped);
             builder.Register<PlayerHSMBuilder>(Lifetime.Scoped);
             builder.Register<PlayerStateManager>(Lifetime.Scoped);
-
-            builder.RegisterEntryPoint<PlayerSpawnerService>()
-                .As<IDisposable>();
-
-            #if UNITY_EDITOR
-            builder.RegisterComponentInHierarchy<SceneViewDriverDisabler>();
-            #endif
         }
+
+        private void ConfigureBomb(IContainerBuilder builder)
+        {
+            if (_bombPrefab == null)
+                Debug.LogWarning($"[FacilitySceneScope] Bomb prefab not assigned on '{gameObject.name}'. BombSpawner will fail to resolve.");
+
+            builder.RegisterInstance(_bombPrefab).Keyed("BombPrefab");
+            builder.Register<BombSpawner>(Lifetime.Scoped);
+        }
+
+        private void ConfigureSceneConfig(IContainerBuilder builder)
+        {
+            builder.RegisterInstance(new CharacterSceneConfig
+            {
+                SpawnPlayerOnStart = true,
+                DefaultStartPosition = _startSpawnPoint.position,
+                DoorSpawnOffset = 3f
+            });
+        }
+
+        private void ConfigureEntryPoints(IContainerBuilder builder)
+        {
+            builder.RegisterEntryPoint<PlayerSpawnerService>().AsSelf();
+        }
+
+        private void ConfigureBuildCallbacks(IContainerBuilder builder)
+        {
+            builder.RegisterBuildCallback(container =>
+            {
+                container.Resolve<CameraSwitcher>().Initialize();
+                container.Resolve<CameraTargetManager>().Initialize();
+                container.Resolve<CameraEffectController>().Initialize();
+                container.Resolve<CameraPanMover>().Initialize();
+            });
+        }
+
+        #endregion
     }
 }   

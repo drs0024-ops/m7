@@ -3,7 +3,6 @@ using Game.Core.Enums;
 using Game.Core.Messages;
 using Game.Core.StateMachine;
 using MessagePipe;
-using VContainer;
 
 namespace Game.Gameplay.Player
 {
@@ -15,11 +14,12 @@ namespace Game.Gameplay.Player
         private readonly IPublisher<PlayerStateChanged> _playerStateChangedPublisher;
         private bool _disposed;
 
-        [Inject]
-        public PlayerStateManager(StateMachine machine)
+        public PlayerStateManager(
+            StateMachine machine,
+            IPublisher<PlayerStateChanged> playerStateChangedPublisher)
         {
             _machine = machine ?? throw new ArgumentNullException(nameof(machine));
-            _playerStateChangedPublisher = GlobalMessagePipe.GetPublisher<PlayerStateChanged>();
+            _playerStateChangedPublisher = playerStateChangedPublisher;
 
             if (_machine.Sequencer != null)
                 _machine.Sequencer.OnStateChange += OnHsmStateChange;

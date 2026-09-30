@@ -1,49 +1,92 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using MessagePipe;
-using Game.Core.Messages;
-using UnityEngine;
-using VContainer;
-using VContainer.Unity;
-using Game.Core.Interfaces;
-using System;
 using Game.Core.Data;
-/// <summary>
-/// Tracks unlocked upgrades and active timed effects.
-/// Uses tick-based expiration. No publishing — pure state.
-/// </summary>
+using Game.Core.Interfaces;
+using Game.Core.Messages;
+using MessagePipe;
+using UnityEngine;
+using VContainer.Unity;
 
 namespace Game.Gameplay.Upgrades
 {
+    /// <summary>
+    /// Tracks unlocked upgrades and active timed effects.
+    /// Integrates with the save system via ISaveable.
+    /// </summary>
     public class UpgradeStateManager : ITickable, IStartable, ISaveable, IDisposable
     {
-        private ISubscriber<PlayerSpawned> _playerSpawnedSubscriber;
+        #region Dependencies
+
+        private readonly ISubscriber<PlayerSpawned> _playerSpawnedSubscriber;
+        private readonly IPublisher<UpgradeExpired> _expiredPublisher;
         private readonly UpgradeListObject _registry;
         private readonly ISaveableRegistry _saveableRegistry;
-        private readonly List<IDisposable> _subscriptions = new();
 
-        private IPublisher<UpgradeExpired> _expiredPublisher;
+        #endregion
 
+        #region State
+
+        private readonly List<IDisposable> _subscriptions = new(1);
         private readonly HashSet<string> _unlockedUpgradeIds = new();
         private readonly Dictionary<string, float> _activeTimedEffects = new();
         private Transform _currentPlayer;
-
         private bool _disposed;
 
-        [Inject]
-        public UpgradeStateManager(UpgradeListObject registry, ISaveableRegistry saveableRegistry)
+        #endregion
+
+        #region Public API
+
+        public string SaveId => "PlayerUpgrades";
+        public Transform CurrentPlayer => _currentPlayer;
+
+        public bool HasUpgrade(string id) => _unlockedUpgradeIds.Contains(id);
+        public bool IsEffectActive(string id) => _activeTimedEffects.ContainsKey(id);
+
+        public float GetRemainingTime(string id)
+        {
+            if (!_activeTimedEffects.TryGetValue(id, out var expiry)) return 0f;
+            return Mathf.Max(0f, expiry - Time.time);
+        }
+
+        public IReadOnlyCollection<string> UnlockedUpgradeIds => _unlockedUpgradeIds;
+
+        public PlayerUpgrade GetUpgrade(string id) => _registry.GetUpgrade(id);
+
+        public bool AddUpgrade(string upgradeId)
+        {
+            return _unlockedUpgradeIds.Add(upgradeId);
+        }
+
+        public void StartTimedEffect(string upgradeId, float duration)
+        {
+            _activeTimedEffects[upgradeId] = Time.time + duration;
+        }
+
+        public void LoadFromIds(string[] ids)
+        {
+            _unlockedUpgradeIds.Clear();
+            _activeTimedEffects.Clear();
+
+            for (int i = 0; i < ids.Length; i++)
+            {
+                if (_registry.GetUpgrade(ids[i]) != null)
+                    _unlockedUpgradeIds.Add(ids[i]);
+                else
+                    Debug.LogWarning($"[UpgradeStateManager] Saved upgrade '{ids[i]}' not found.");
+            }
+        }
+
+        public UpgradeStateManager(
+            UpgradeListObject registry,
+            ISaveableRegistry saveableRegistry,
+            ISubscriber<PlayerSpawned> playerSpawnedSubscriber,
+            IPublisher<UpgradeExpired> expiredPublisher)
         {
             _registry = registry;
             _saveableRegistry = saveableRegistry;
-        }
-
-        void IStartable.Start()
-        {
-            _saveableRegistry.Register(this);
-            _playerSpawnedSubscriber = GlobalMessagePipe.GetSubscriber<PlayerSpawned>();
-            _subscriptions.Add(_playerSpawnedSubscriber.Subscribe(OnPlayerSpawned));
-
-            _expiredPublisher = GlobalMessagePipe.GetPublisher<UpgradeExpired>();
+            _playerSpawnedSubscriber = playerSpawnedSubscriber;
+            _expiredPublisher = expiredPublisher;
         }
 
         public void Dispose()
@@ -53,41 +96,51 @@ namespace Game.Gameplay.Upgrades
 
             _saveableRegistry.Unregister(this);
 
-            foreach (var sub in _subscriptions) sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
 
             _unlockedUpgradeIds.Clear();
             _activeTimedEffects.Clear();
         }
 
+        #endregion
+
+        #region IStartable
+
+        void IStartable.Start()
+        {
+            _saveableRegistry.Register(this);
+            _subscriptions.Add(_playerSpawnedSubscriber.Subscribe(OnPlayerSpawned));
+        }
+
+        #endregion
+
+        #region ITickable
+
         void ITickable.Tick()
         {
             if (_disposed) return;
 
             float now = Time.time;
-            var expired = new List<string>();
+            var toRemove = new List<string>();
 
             foreach (var kvp in _activeTimedEffects)
             {
                 if (kvp.Value <= now)
-                    expired.Add(kvp.Key);
+                    toRemove.Add(kvp.Key);
             }
 
-            for (int i = 0; i < expired.Count; i++)
+            for (int i = 0; i < toRemove.Count; i++)
             {
-                _activeTimedEffects.Remove(expired[i]);
-                _expiredPublisher.Publish(new UpgradeExpired(expired[i]));
+                _activeTimedEffects.Remove(toRemove[i]);
+                _expiredPublisher.Publish(new UpgradeExpired(toRemove[i]));
             }
         }
 
-        private void OnPlayerSpawned(PlayerSpawned message)
-        {
-            _currentPlayer = message.Player;
-        }
+        #endregion
 
         #region ISaveable
-
-        public string SaveId => "PlayerUpgrades";
 
         public ISaveData GetSaveData()
         {
@@ -107,54 +160,13 @@ namespace Game.Gameplay.Upgrades
 
         #endregion
 
-        #region Public API
+        #region Message Handlers
 
-        public bool HasUpgrade(string id) => _unlockedUpgradeIds.Contains(id);
-
-        public bool IsEffectActive(string id) => _activeTimedEffects.ContainsKey(id);
-
-        public float GetRemainingTime(string id)
+        private void OnPlayerSpawned(PlayerSpawned message)
         {
-            if (!_activeTimedEffects.TryGetValue(id, out var expiry)) return 0f;
-            return Mathf.Max(0f, expiry - Time.time);
-        }
-
-        public string[] UnlockedUpgradeIds => _unlockedUpgradeIds.ToArray();
-
-        public Transform CurrentPlayer => _currentPlayer;
-
-        public PlayerUpgrade GetUpgrade(string id) => _registry.GetUpgrade(id);
-
-        public bool AddUpgrade(string upgradeId)
-        {
-            if (_unlockedUpgradeIds.Contains(upgradeId)) return false;
-            _unlockedUpgradeIds.Add(upgradeId);
-            return true;
-        }
-
-        public void StartTimedEffect(string upgradeId, float duration)
-        {
-            _activeTimedEffects[upgradeId] = Time.time + duration;
-        }
-
-        public void LoadFromIds(string[] ids)
-        {
-            _unlockedUpgradeIds.Clear();
-            _activeTimedEffects.Clear();
-
-            foreach (var id in ids)
-            {
-                if (_registry.GetUpgrade(id) != null)
-                    _unlockedUpgradeIds.Add(id);
-                else
-                    Debug.LogWarning($"[UpgradeStateManager] Saved upgrade '{id}' not found.");
-            }
+            _currentPlayer = message.Player;
         }
 
         #endregion
-
     }
-
-}
-
- 
+}   

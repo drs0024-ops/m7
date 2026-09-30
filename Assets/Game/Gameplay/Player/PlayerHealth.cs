@@ -1,81 +1,53 @@
 using UnityEngine;
 using VContainer;
+using VContainer.Unity;
+using Game.Core;
+using Game.Core.Interfaces;
 using MessagePipe;
 using Game.Core.Messages;
-using Game.Core.Interfaces;
-using VContainer.Unity;
 
 namespace Game.Gameplay.Player
 {
     public class PlayerHealth : MonoBehaviour, IDamagable, ISaveable, IStartable
     {
-        [field: SerializeField] public float MaxHealth { get; set; } = 100f;
-        public float CurrentHealth { get; private set; }
-        public bool IsInvincible { get; set; }
-        public bool IsDead => CurrentHealth <= 0f;
-
         [Inject] private ISaveableRegistry _registry;
+        private HealthModel _model;
 
-        private IPublisher<PlayerDamaged> _damagedPublisher;
-        private IPublisher<PlayerDied> _diedPublisher;
-        private IPublisher<EntityHealthChanged> _healthChangedPublisher;
-        private InputManager _inputManager;
-
+        public float MaxHealth => _model.MaxHealth;
+        public float CurrentHealth => _model.CurrentHealth;
+        public bool IsInvincible
+        {
+            get => _model.IsInvincible;
+            set => _model.IsInvincible = value;
+        }
+        public bool IsDead => _model.IsDead;
         public string SaveId => "PlayerHealth";
 
         [Inject]
-        private void Inject(InputManager inputManager)
+        private void Inject(
+            ISaveableRegistry registry,
+            IPublisher<PlayerDamaged> damagedPub,
+            IPublisher<PlayerDied> diedPub,
+            IPublisher<EntityHealthChanged> healthChangedPub,
+            IInputState input,
+            LevelStateSnapshot snapshot)
         {
-            _inputManager = inputManager;
+            _registry = registry;
+            _model = new HealthModel(damagedPub, diedPub, healthChangedPub, input, snapshot);
+            _model.SetTransform(transform);
         }
 
         void IStartable.Start()
         {
-            _damagedPublisher = GlobalMessagePipe.GetPublisher<PlayerDamaged>();
-            _diedPublisher = GlobalMessagePipe.GetPublisher<PlayerDied>();
-            _healthChangedPublisher = GlobalMessagePipe.GetPublisher<EntityHealthChanged>();
-
-            CurrentHealth = MaxHealth;
             _registry.Register(this);
         }
 
-        public void Damage(float damageAmount, Vector3 hitDirection)
-        {
-            if (IsInvincible || IsDead) return;
+        public void Damage(float amount, Vector3 dir) => _model.Damage(amount, dir);
+        public void Die() => _model.Die();
+        public void Heal(float amount) => _model.Heal(amount);
+        public void ResetHealth() => _model.ResetHealth();
 
-            CurrentHealth = Mathf.Max(0f, CurrentHealth - damageAmount);
-
-            _healthChangedPublisher.Publish(new EntityHealthChanged(transform, MaxHealth, CurrentHealth));
-            _damagedPublisher.Publish(new PlayerDamaged(damageAmount, hitDirection, _inputManager.Movement.x));
-
-            if (IsDead)
-                Die();
-        }
-
-        public void Die()
-        {
-            if (!IsDead) return;
-            _diedPublisher.Publish(new PlayerDied(transform.position));
-        }
-
-        public void Heal(float amount)
-        {
-            if (IsDead) return;
-            CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + amount);
-            _healthChangedPublisher.Publish(new EntityHealthChanged(transform, MaxHealth, CurrentHealth));
-        }
-
-        public void ResetHealth()
-        {
-            IsInvincible = false;
-            CurrentHealth = MaxHealth;
-            _healthChangedPublisher.Publish(new EntityHealthChanged(transform, MaxHealth, CurrentHealth));
-        }
-
-        private void OnDestroy()
-        {
-            _registry?.Unregister(this);
-        }
+        private void OnDestroy() => _registry?.Unregister(this);
 
         #region ISaveable
 
@@ -90,11 +62,10 @@ namespace Game.Gameplay.Player
         {
             if (data is PlayerHealthSaveData d)
             {
-                CurrentHealth = d.CurrentHealth;
-                IsInvincible = d.IsInvincible;
+                _model.RestoreState(d.CurrentHealth, d.IsInvincible);
             }
         }
-
-        #endregion
     }
+        #endregion
+    
 }   

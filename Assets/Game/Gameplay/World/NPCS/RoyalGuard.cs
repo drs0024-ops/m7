@@ -1,22 +1,25 @@
 using Game.Core.Data;
-using Game.Core.Interfaces;
+using Game.Core.Messages;
+using MessagePipe;
 using UnityEngine;
 
 namespace Game.Gameplay.World
 {
-    public class RoyalGuard : NPC, ITalkable
+    /// <summary>
+    /// Royal Guard NPC. Responds to player interact with a dialogue.
+    /// </summary>
+    public class RoyalGuard : NPC
     {
-        [SerializeField] private DialogueText _dialogueText;
-        [SerializeField] private IDialogueController _dialogueController;
+        [SerializeField] private DialogueDataSO _firstVisit;
+        [SerializeField] private DialogueDataSO _returnVisit;
+        [SerializeField] private DialogueSeenTracker _tracker;
 
         public override void Interact()
         {
-            Talk();
-        }
+            var dialogue = _tracker.HasSeen(_firstVisit.name) ? _returnVisit : _firstVisit;
 
-        public void Talk()
-        {
-            _dialogueController.ShowDialogue(_dialogueText, autoClose: false);
+            GlobalMessagePipe.GetPublisher<DialogueRequested>()
+                .Publish(new DialogueRequested(dialogue, autoClose: false));
         }
-    }
+    }   
 }   

@@ -3,42 +3,55 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
-using VContainer;
-using VContainer.Unity;
 using Game.Core.Messages;
 using MessagePipe;
-using UnityEngine.Rendering.Universal;
+using VContainer;
 
 namespace Game.Gameplay.Player
 {
-    public class InvisibilityVisualPresenter : MonoBehaviour, IStartable, IDisposable
+    public class InvisibilityVisualPresenter : MonoBehaviour, IDisposable
     {
-        [SerializeField] private Renderer _targetRenderer;
-        [SerializeField] private ShadowCaster2D _shadowCaster2D;
         [SerializeField] private float _transitionDuration = 0.5f;
 
         private ISubscriber<InvisibilityStateChanged> _stateSub;
+        private ISubscriber<PlayerSpawned> _playerSpawnedSub;
+
+        private Renderer _targetRenderer;
         private MaterialPropertyBlock _propertyBlock;
         private CancellationTokenSource _transitionCts;
         private bool _isDisposed;
 
-        private readonly List<IDisposable> _subscriptions = new(1);
+        private readonly List<IDisposable> _subscriptions = new(2);
         private static readonly int CloakFactorId = Shader.PropertyToID("_CloakFactor");
 
         [Inject]
-        public InvisibilityVisualPresenter()
+        private void Inject(
+            ISubscriber<InvisibilityStateChanged> stateSub,
+            ISubscriber<PlayerSpawned> playerSpawnedSub)
         {
+            _stateSub = stateSub;
+            _playerSpawnedSub = playerSpawnedSub;
         }
 
-        void IStartable.Start()
+        private void Start()
         {
-            _stateSub = GlobalMessagePipe.GetSubscriber<InvisibilityStateChanged>();
             _propertyBlock = new MaterialPropertyBlock();
+            _subscriptions.Add(_playerSpawnedSub.Subscribe(OnPlayerSpawned));
             _subscriptions.Add(_stateSub.Subscribe(OnStateChanged));
+        }
+
+        private void OnPlayerSpawned(PlayerSpawned message)
+        {
+            if (message.Player == null) return;
+            _targetRenderer = message.Player.GetComponentInChildren<Renderer>();
+            if (_targetRenderer == null)
+                Debug.LogWarning("[InvisibilityVisualPresenter] Player has no Renderer.");
         }
 
         private void OnStateChanged(InvisibilityStateChanged state)
         {
+            if (_targetRenderer == null) return;
+
             _transitionCts?.Cancel();
             _transitionCts?.Dispose();
 
@@ -48,8 +61,6 @@ namespace Game.Gameplay.Player
 
         private async UniTask AnimateCloak(float targetFactor, CancellationToken token)
         {
-            if (_targetRenderer == null) return;
-
             _targetRenderer.GetPropertyBlock(_propertyBlock);
             float startFactor = _propertyBlock.GetFloat(CloakFactorId);
             float elapsed = 0f;
@@ -63,9 +74,6 @@ namespace Game.Gameplay.Player
                 _propertyBlock.SetFloat(CloakFactorId, currentFactor);
                 _targetRenderer.SetPropertyBlock(_propertyBlock);
 
-                if (_shadowCaster2D != null)
-                    _shadowCaster2D.enabled = currentFactor < 0.9f;
-
                 await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken: token);
             }
 
@@ -73,9 +81,6 @@ namespace Game.Gameplay.Player
             {
                 _propertyBlock.SetFloat(CloakFactorId, targetFactor);
                 _targetRenderer.SetPropertyBlock(_propertyBlock);
-
-                if (_shadowCaster2D != null)
-                    _shadowCaster2D.enabled = targetFactor < 0.9f;
             }
         }
 

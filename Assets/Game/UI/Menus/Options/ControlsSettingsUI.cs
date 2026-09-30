@@ -9,6 +9,10 @@ using Game.Gameplay.Save;
 
 namespace Game.UI
 {
+    /// <summary>
+    /// Controls settings sub-panel: remap keyboard bindings for player actions,
+    /// or reset all to defaults. Activated/deactivated by OptionsMenuController.
+    /// </summary>
     public class ControlsSettingsUI : MonoBehaviour
     {
         [System.Serializable]
@@ -21,30 +25,34 @@ namespace Game.UI
         private enum RowType { Remap, Action }
         private enum RebindState { None, Waiting, Confirming }
 
+        private static readonly string[] DefaultBindings =
+        {
+            "<Keyboard>/w", "<Keyboard>/s", "<Keyboard>/a", "<Keyboard>/d",
+            "<Keyboard>/space", "<Keyboard>/shift", "<Keyboard>/leftCtrl", "<Keyboard>/o"
+        };
+
         #region Fields
 
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
-        [Inject] private SettingsSavable _settings;
+      
 
         [Header("Settings")]
         [SerializeField] private SettingRow[] _rows;
         [SerializeField] private float _blinkInterval = 0.5f;
 
         private IPublisher<SaveRequest> _savePublisher;
+        private IObjectResolver _container;
 
         private string[] _actionNames;
         private string[] _subBindingNames;
         private RowType[] _rowTypes;
         private string[] _currentDisplay;
-        private string[] _bindingPaths =
-        {
-            "<Keyboard>/w", "<Keyboard>/s", "<Keyboard>/a", "<Keyboard>/d",
-            "<Keyboard>/space", "<Keyboard>/shift", "<Keyboard>/leftCtrl", "<Keyboard>/o"
-        };
+        private string[] _bindingPaths = new string[8];
 
         private int _selectedRow;
         private bool _enabled;
+        private bool _dirty;
         private RebindState _rebindState;
         private string _pendingKey;
 
@@ -57,9 +65,14 @@ namespace Game.UI
         #region Injection
 
         [Inject]
-        public void Construct(IPublisher<SaveRequest> savePublisher)
+        public void Construct(
+            InputManager input,
+            IPublisher<SaveRequest> savePublisher, 
+            IObjectResolver container)
         {
+            _inputManager = input;
             _savePublisher = savePublisher;
+            _container = container;
         }
 
         #endregion
@@ -71,6 +84,7 @@ namespace Game.UI
             if (_rows == null || _rows.Length == 0)
             {
                 Debug.LogError("[Controls] _rows not assigned!", this);
+                enabled = false;
                 return;
             }
 
@@ -96,7 +110,10 @@ namespace Game.UI
 
         private void OnEnable()
         {
+            if (!enabled) return;
+
             _enabled = true;
+            _dirty = false;
             _upHeld = _downHeld = false;
             _blinkTimer = 0f;
             _cursorVisible = true;
@@ -112,9 +129,9 @@ namespace Game.UI
 
         private void OnDisable()
         {
-            if (_enabled)
-                _savePublisher.Publish(new SaveRequest("ControlsSettings", false));
             _enabled = false;
+            if (_dirty)
+                _savePublisher.Publish(new SaveRequest("ControlsSettings", false));
         }
 
         #endregion
@@ -125,7 +142,6 @@ namespace Game.UI
         {
             if (!_enabled) return;
 
-            // Blink (always runs)
             _blinkTimer += Time.unscaledDeltaTime;
             if (_blinkTimer >= _blinkInterval)
             {
@@ -134,7 +150,6 @@ namespace Game.UI
                 UpdateRow(_selectedRow);
             }
 
-            // Rebind states
             if (_rebindState == RebindState.Waiting)
             {
                 HandleRebindWaiting();
@@ -147,7 +162,6 @@ namespace Game.UI
                 return;
             }
 
-            // Normal navigation
             float y = _inputManager.Movement.y;
             bool up = y > 0.5f;
             bool down = y < -0.5f;
@@ -177,8 +191,6 @@ namespace Game.UI
         {
             _rebindState = RebindState.Waiting;
             _pendingKey = null;
-            // Display stays as current key (e.g., "W █") — player just presses new key
-            Debug.Log($"[Controls] Rebinding: row {_selectedRow}");
         }
 
         private void HandleRebindWaiting()
@@ -200,7 +212,6 @@ namespace Game.UI
                 _pendingKey = button.name;
                 _rebindState = RebindState.Confirming;
                 UpdateRow(_selectedRow);
-                Debug.Log($"[Controls] Pending: '{_pendingKey}'");
                 return;
             }
         }
@@ -247,7 +258,6 @@ namespace Game.UI
                         action.ApplyBindingOverride(i, bindingPath);
                         _currentDisplay[row] = FormatKeyName(keyName);
                         _bindingPaths[row] = bindingPath;
-                        Debug.Log($"[Controls] Row {row} → {keyName}");
                         break;
                     }
                 }
@@ -262,13 +272,13 @@ namespace Game.UI
                         action.ApplyBindingOverride(i, bindingPath);
                         _currentDisplay[row] = FormatKeyName(keyName);
                         _bindingPaths[row] = bindingPath;
-                        Debug.Log($"[Controls] Row {row} → {keyName}");
                         break;
                     }
                 }
             }
 
-            _settings.SetControls(_bindingPaths);
+            _dirty = true;
+            _container.Resolve<SettingsSavable>().SetControls(_bindingPaths);
         }
 
         private void ResetAll()
@@ -277,16 +287,13 @@ namespace Game.UI
             var playerMap = actions.FindActionMap("Player");
             playerMap.RemoveAllBindingOverrides();
 
-            _bindingPaths = new[]
-            {
-                "<Keyboard>/w", "<Keyboard>/s", "<Keyboard>/a", "<Keyboard>/d",
-                "<Keyboard>/space", "<Keyboard>/shift", "<Keyboard>/leftCtrl", "<Keyboard>/o"
-            };
+            for (int i = 0; i < _bindingPaths.Length; i++)
+                _bindingPaths[i] = DefaultBindings[i];
 
             LoadCurrentBindings();
             RebuildAll();
-            _settings.SetControls(_bindingPaths);
-            Debug.Log("[Controls] Reset to defaults.");
+            _dirty = true;
+            _container.Resolve<SettingsSavable>().SetControls(_bindingPaths);
         }
 
         #endregion

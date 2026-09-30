@@ -1,17 +1,35 @@
-// Centralized input: reads InputSystem actions, exposes snapshot properties, publishes back-button events.
-using Game.Core.Messages;
-using MessagePipe;
-using UnityEngine.InputSystem;
 using System;
-using Game.Core.Interfaces;
 using UnityEngine;
+using UnityEngine.InputSystem;
+using Game.Core.Interfaces;
 using Game.Core.Enums;
+using MessagePipe;
+using Game.Core.Messages;
+using VContainer;
 
 namespace Game.Gameplay.Player
 {
-    public class InputManager : MonoBehaviour, IInputSwitcher, IDisposable
+    /// <summary>
+    /// Bridges the Unity Input System to the rest of the game.
+    /// Exposes per-frame input state via properties and handles
+    /// action-map switching between gameplay and menu contexts.
+    /// </summary>
+    public class InputManager : MonoBehaviour, IInputSwitcher, IInputState, IDisposable
     {
+        #region Constants
+
         private const float DEADZONE_SQR = 0.01f;
+
+        #endregion
+
+        #region Dependencies
+
+        [Inject]
+        private IPublisher<InputBackPressed> _backPublisher;
+
+        #endregion
+
+        #region Input Actions
 
         private PlayerInput _playerInput;
         private InputAction _moveAction;
@@ -22,17 +40,23 @@ namespace Game.Gameplay.Player
         private InputAction _invisibilityAction;
         private InputAction _downAction;
         private InputAction _menuAction;
-        private InputAction _jumpActionPlayer;
-        private InputAction _jumpActionMenu;
         private InputAction _confirmActionMenu;
         private InputActionMap _playerMap;
         private InputActionMap _menuMap;
-
-        // NOT readonly — deferred pattern
-        private IPublisher<InputBackPressed> _backPublisher;
-        private bool _disposed;
         private InputAction _moveActionPlayer;
         private InputAction _moveActionMenu;
+        private InputAction _jumpActionPlayer;
+        private InputAction _jumpActionMenu;
+
+        #endregion
+
+        #region State
+
+        private bool _disposed;
+
+        #endregion
+
+        #region Public API
 
         public PlayerInput PlayerInput => _playerInput;
 
@@ -48,10 +72,74 @@ namespace Game.Gameplay.Player
         public bool EscapeWasPressed { get; private set; }
         public bool EscapeIsHeld { get; private set; }
         public bool ConfirmWasPressed { get; private set; }
-
         public bool MoveWasPressedUp { get; private set; }
         public bool MoveWasPressedDown { get; private set; }
-   
+
+        public bool IsInvisibilityPressed {get; private set;}
+
+        public void ResetAll()
+        {
+            Movement = Vector2.zero;
+            JumpWasPressed = false;
+            JumpIsHeld = false;
+            JumpWasReleased = false;
+            RunIsHeld = false;
+            AttackWasPressed = false;
+            InteractWasPressed = false;
+            InvisibilityWasPressed = false;
+            DownWasPressed = false;
+            EscapeWasPressed = false;
+            EscapeIsHeld = false;
+            ConfirmWasPressed = false;
+            MoveWasPressedUp = false;
+            MoveWasPressedDown = false;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+
+        #endregion
+
+        #region IInputSwitcher
+
+        public void SwitchToMenu()
+        {
+            ResetAll();
+            _playerMap.Disable();
+            _menuMap.Enable();
+            _moveAction = _moveActionMenu;
+            _jumpAction = _jumpActionMenu;
+        }
+
+        public void SwitchToPlayer()
+        {
+            ResetAll();
+            _menuMap.Disable();
+            _playerMap.Enable();
+            _moveAction = _moveActionPlayer;
+            _jumpAction = _jumpActionPlayer;
+        }
+
+        public void SwitchTo(GameState state)
+        {
+            switch (state)
+            {
+                case GameState.Gameplay:
+                    SwitchToPlayer();
+                    break;
+                default:
+                    SwitchToMenu();
+                    break;
+            }
+        }
+
+        #endregion
+
+        #region MonoBehaviour
+
         private void Awake()
         {
             _playerInput = GetComponent<PlayerInput>();
@@ -59,11 +147,11 @@ namespace Game.Gameplay.Player
             {
                 Debug.LogError("[InputManager] PlayerInput component missing!", this);
                 enabled = false;
-        #if UNITY_EDITOR
+#if UNITY_EDITOR
                 throw new InvalidOperationException("InputManager requires a PlayerInput component.");
-        #else
+#else
                 return;
-        #endif
+#endif
             }
 
             var actions = _playerInput.actions;
@@ -82,10 +170,9 @@ namespace Game.Gameplay.Player
             _invisibilityAction = _playerMap?.FindAction("Invisable");
             _downAction = _playerMap?.FindAction("Down");
             _menuAction = _menuMap?.FindAction("Cancel");
-
             _confirmActionMenu = _menuMap?.FindAction("Confirm");
 
-            // ✅ Initialize based on which map is actually enabled
+            // Initialize based on which map is actually enabled
             if (_menuMap != null && _menuMap.enabled)
             {
                 _moveAction = _moveActionMenu;
@@ -96,11 +183,6 @@ namespace Game.Gameplay.Player
                 _moveAction = _moveActionPlayer;
                 _jumpAction = _jumpActionPlayer;
             }
-        }   
-
-        private void Start()  // ← replaces IStartable.Start()
-        {
-            _backPublisher = GlobalMessagePipe.GetPublisher<InputBackPressed>();
         }
 
         private void OnEnable()
@@ -133,23 +215,22 @@ namespace Game.Gameplay.Player
             _confirmActionMenu?.Disable();
         }
 
+        private void OnDestroy()
+        {
+            Dispose();
+        }
+
+        #endregion
+
+        #region Per-Frame
+
         private void Update()
         {
-            Debug.Log($"[Input] InstanceID={GetInstanceID()}, MoveWasPressedDown={MoveWasPressedDown}");   
             if (_disposed) return;
 
-            // ── DIAGNOSTIC (remove later) ──
-            var moveVal = _moveAction?.ReadValue<Vector2>() ?? Vector2.zero;
-            if (moveVal.y != 0f)
-            {
-                Debug.Log($"[Input] val={moveVal}, wasPressed={_moveAction.WasPressedThisFrame()}, map={_moveAction.actionMap.name}, action={_moveAction.name}");
-            }
-            // ── END DIAGNOSTIC ──
-
-            Movement = _moveAction != null
-                ? (_moveAction.ReadValue<Vector2>().sqrMagnitude < DEADZONE_SQR ? Vector2.zero : _moveAction.ReadValue<Vector2>())
-                : Vector2.zero;
-
+            // Read move value once
+            Vector2 moveInput = _moveAction != null ? _moveAction.ReadValue<Vector2>() : Vector2.zero;
+            Movement = moveInput.sqrMagnitude < DEADZONE_SQR ? Vector2.zero : moveInput;
 
             JumpIsHeld = _jumpAction?.IsPressed() ?? false;
             RunIsHeld = _runAction?.IsPressed() ?? false;
@@ -162,77 +243,17 @@ namespace Game.Gameplay.Player
             InvisibilityWasPressed = _invisibilityAction?.WasPressedThisFrame() ?? false;
 
             EscapeWasPressed = _menuAction?.WasPressedThisFrame() ?? false;
-            if (EscapeWasPressed && _backPublisher != null)
+            if (EscapeWasPressed)
                 _backPublisher.Publish(default);
 
             EscapeIsHeld = _menuAction?.IsPressed() ?? false;
 
-            MoveWasPressedUp = _moveAction != null && _moveAction.ReadValue<Vector2>().y > 0.5f && _moveAction.WasPressedThisFrame();
-            MoveWasPressedDown = _moveAction != null && _moveAction.ReadValue<Vector2>().y < -0.5f && _moveAction.WasPressedThisFrame();
+            MoveWasPressedUp = _moveAction != null && moveInput.y > 0.5f && _moveAction.WasPressedThisFrame();
+            MoveWasPressedDown = _moveAction != null && moveInput.y < -0.5f && _moveAction.WasPressedThisFrame();
+
             ConfirmWasPressed = _confirmActionMenu?.WasPressedThisFrame() ?? false;
-
-            // Log which maps are currently enabled:
-            foreach (var map in _playerInput.actions.actionMaps)
-            {
-                if (map.enabled)
-                    Debug.Log($"[Input] Active map: {map.name}");
-            }
         }
 
-        public void ResetAll()
-        {
-            Movement = Vector2.zero;
-            JumpWasPressed = false;
-            JumpIsHeld = false;
-            JumpWasReleased = false;
-            RunIsHeld = false;
-            AttackWasPressed = false;
-            InteractWasPressed = false;
-            InvisibilityWasPressed = false;
-            DownWasPressed = false;
-            EscapeWasPressed = false;
-            EscapeIsHeld = false;
-            ConfirmWasPressed = false;
-        }
-
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-        }
-
-        private void OnDestroy()
-        {
-            if (!_disposed) Dispose();
-        }
-
-        public void SwitchToMenu()
-        {
-            _playerMap.Disable();
-            _menuMap.Enable();
-            _moveAction = _moveActionMenu;
-            _jumpAction = _jumpActionMenu;
-        }
-
-        public void SwitchToPlayer()
-        {
-            _menuMap.Disable();
-            _playerMap.Enable();
-            _moveAction = _moveActionPlayer;
-            _jumpAction = _jumpActionPlayer;
-        }
-
-        public void SwitchTo(GameState state)
-        {
-            switch (state)
-            {
-                case GameState.Gameplay:
-                    SwitchToPlayer();
-                    break;
-                default:
-                    SwitchToMenu();
-                    break;
-            }
-        }
+        #endregion
     }
 }   

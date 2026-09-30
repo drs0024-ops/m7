@@ -1,25 +1,42 @@
 using UnityEngine;
 using VContainer;
-using VContainer.Unity;
 
 namespace Game.Gameplay.Player
 {
     public class PlayerFactory : IPlayerFactory
     {
         private readonly IObjectResolver _resolver;
-        private readonly PlayerPrefabReference _prefabRef;
+        private readonly GameObject _prefab;
 
-        public PlayerFactory(IObjectResolver resolver, PlayerPrefabReference prefabRef)
+        public PlayerFactory(IObjectResolver resolver)
         {
             _resolver = resolver;
-            _prefabRef = prefabRef;
+            _prefab = resolver.Resolve<GameObject>("PlayerPrefab");
+
+            if (_prefab == null)
+                Debug.LogError("[PlayerFactory] 'PlayerPrefab' resolved to null. Check FacilitySceneLifetimeScope registration.");
         }
 
         public PlayerStateDriverShell CreatePlayer(Vector3 position, Quaternion rotation)
         {
-            var gameObject = _resolver.Instantiate(_prefabRef.Value, position, rotation);
-            return gameObject.GetComponent<PlayerStateDriverShell>();
-        }
+            if (_prefab == null)
+            {
+                Debug.LogError("[PlayerFactory] Cannot create player: prefab is null.");
+                return null;
+            }
 
+            var instance = Object.Instantiate(_prefab, position, rotation);
+            _resolver.Inject(instance);
+
+            var shell = instance.GetComponent<PlayerStateDriverShell>();
+            if (shell == null)
+            {
+                Object.Destroy(instance);
+                Debug.LogError($"[PlayerFactory] Prefab '{_prefab.name}' does not have a PlayerStateDriverShell component.");
+                return null;
+            }
+
+            return shell;
+        }
     }
 }   

@@ -1,26 +1,23 @@
 using System;
-using System.Collections.Generic;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
-using VContainer.Unity;
+using VContainer;
 
 namespace Game.Gameplay.Upgrades
 {
     [RequireComponent(typeof(BoxCollider2D))]
-    public class UpgradePickup : MonoBehaviour, IStartable, IDisposable
+    public class UpgradePickup : MonoBehaviour, IDisposable
     {
         [SerializeField] private PlayerUpgrade _upgrade;
 
         private IPublisher<UpgradePickedUp> _upgradePublisher;
         private bool _disposed;
-        private readonly List<IDisposable> _subscriptions = new();
 
-        public UpgradePickup() {}
-
-        public void Start()
+        [Inject]
+        private void Construct(IPublisher<UpgradePickedUp> upgradePublisher)
         {
-            _upgradePublisher = GlobalMessagePipe.GetPublisher<UpgradePickedUp>();
+            _upgradePublisher = upgradePublisher;
         }
 
         private void OnTriggerEnter2D(Collider2D other)
@@ -33,14 +30,9 @@ namespace Game.Gameplay.Upgrades
 
         public void Dispose()
         {
-            if (_disposed) return;
             _disposed = true;
-            foreach (var d in _subscriptions)
-                d?.Dispose();
-            _subscriptions.Clear();
         }
 
-        public void OnDestroy() => Dispose();
+        private void OnDestroy() => Dispose();
     }
 }   
-

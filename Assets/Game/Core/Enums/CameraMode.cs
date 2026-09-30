@@ -7,6 +7,7 @@ namespace Game.Core.Enums
     {
         CenterFollow,
         NoYFollow,
-        LockedRoom
+        LockedRoom,
+        BossZoom
     }
 }

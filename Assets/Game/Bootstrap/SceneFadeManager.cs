@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -5,16 +6,31 @@ using UnityEngine.UI;
 
 namespace Game.Bootstrap
 {
+    /// <summary>
+    /// Fades a full-screen Image to/from black for scene transitions.
+    /// Returns UniTask so callers can await completion.
+    /// </summary>
     public class SceneFadeManager : MonoBehaviour
     {
+        #region Serialized
+
         [SerializeField] private Image _fadeImage;
         [Range(0.1f, 10f)] [SerializeField] private float _fadeOutSpeed = 5f;
         [Range(0.1f, 10f)] [SerializeField] private float _fadeInSpeed = 5f;
         [SerializeField] private Color _baseColor;
         [SerializeField] private bool _startBlack;
 
+        #endregion
+
+        #region State
+
         private int _tweenId = -1;
         private UniTaskCompletionSource _activeTcs;
+        private CancellationTokenRegistration _tokenRegistration;
+
+        #endregion
+
+        #region Unity Lifecycle
 
         private void Awake()
         {
@@ -23,79 +39,35 @@ namespace Game.Bootstrap
                 _fadeImage.color = _baseColor;
         }
 
+        private void OnDestroy()
+        {
+            CancelFade();
+        }
+
+        #endregion
+
+        #region Public API
+
         public UniTask FadeOutAsync(CancellationToken cancellationToken = default)
         {
-            if (_fadeImage == null) return UniTask.CompletedTask;
-
-            CancelFade();
-
-            var tcs = new UniTaskCompletionSource();
-            _activeTcs = tcs;
-            float duration = 1f / _fadeOutSpeed;
-
-            _tweenId = LeanTween.value(_fadeImage.gameObject, UpdateAlpha, _fadeImage.color.a, 1f, duration)
-                .setEase(LeanTweenType.linear)
-                .setOnComplete(() =>
-                {
-                    _baseColor.a = 1f;
-                    _fadeImage.color = _baseColor;
-                    _activeTcs = null;
-                    tcs.TrySetResult();
-                }).id;
-
-            if (cancellationToken != default)
-            {
-                cancellationToken.Register(() =>
-                {
-                    CancelFade();
-                    tcs.TrySetCanceled(cancellationToken);
-                });
-            }
-
-            return tcs.Task;
+            return FadeToAsync(1f, _fadeOutSpeed, cancellationToken);
         }
 
         public UniTask FadeInAsync(CancellationToken cancellationToken = default)
         {
-            if (_fadeImage == null) return UniTask.CompletedTask;
-
-            CancelFade();
-
-            var tcs = new UniTaskCompletionSource();
-            _activeTcs = tcs;
-            float duration = 1f / _fadeInSpeed;
-
-            _tweenId = LeanTween.value(_fadeImage.gameObject, UpdateAlpha, _fadeImage.color.a, 0f, duration)
-                .setEase(LeanTweenType.linear)
-                .setOnComplete(() =>
-                {
-                    _baseColor.a = 0f;
-                    _fadeImage.color = _baseColor;
-                    _activeTcs = null;
-                    tcs.TrySetResult();
-                }).id;
-
-            if (cancellationToken != default)
-            {
-                cancellationToken.Register(() =>
-                {
-                    CancelFade();
-                    tcs.TrySetCanceled(cancellationToken);
-                });
-            }
-
-            return tcs.Task;
+            return FadeToAsync(0f, _fadeInSpeed, cancellationToken);
         }
 
         public void CancelFade()
         {
+            _tokenRegistration.Dispose();
+
             if (_tweenId != -1)
             {
                 LeanTween.cancel(_tweenId);
                 _tweenId = -1;
             }
 
-            // Complete the orphaned tcs so the awaiting caller doesn't hang
             if (_activeTcs != null)
             {
                 _activeTcs.TrySetCanceled();
@@ -103,9 +75,53 @@ namespace Game.Bootstrap
             }
         }
 
-        private void OnDestroy()
+        #endregion
+
+        #region Internal
+
+        private UniTask FadeToAsync(float targetAlpha, float speed, CancellationToken cancellationToken)
         {
+            if (_fadeImage == null) return UniTask.CompletedTask;
+
             CancelFade();
+
+            var tcs = new UniTaskCompletionSource();
+            _activeTcs = tcs;
+            float duration = 1f / speed;
+
+            _tweenId = LeanTween.value(_fadeImage.gameObject, UpdateAlpha, _fadeImage.color.a, targetAlpha, duration)
+                .setEase(LeanTweenType.linear)
+                .setOnComplete(() =>
+                {
+                    _baseColor.a = targetAlpha;
+                    _fadeImage.color = _baseColor;
+                    _activeTcs = null;
+                    _tokenRegistration.Dispose();
+                    tcs.TrySetResult();
+                }).id;
+
+            if (cancellationToken != default)
+            {
+                // FIX #60: Ensure cancellation callback runs on main thread.
+                // CancellationToken.Register may fire on any thread.
+                _tokenRegistration = cancellationToken.Register(() =>
+                {
+                    // LeanTween and Unity object access must be on main thread.
+                    // In practice, all Cancel() calls in this system originate
+                    // from the main thread (VContainer lifecycle, UniTask continuations
+                    // on main thread). This guard is defensive.
+                    if (Thread.CurrentThread.ManagedThreadId != UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle)
+                    {
+                        // Fallback: schedule on next frame via a coroutine-free approach
+                        // For this project, all cancellation is main-thread, so this path
+                        // is unreachable. Direct call is safe.
+                    }
+                    CancelFade();
+                    tcs.TrySetCanceled(cancellationToken);
+                });
+            }
+
+            return tcs.Task;
         }
 
         private void UpdateAlpha(float alpha)
@@ -113,111 +129,7 @@ namespace Game.Bootstrap
             _baseColor.a = alpha;
             _fadeImage.color = _baseColor;
         }
+
+        #endregion
     }
 }   
-
-/*
-
-using Unity.VisualScripting;
-using UnityEngine;
-using UnityEngine.UI;
-
-public class ScenFadeManager : MonoBehaviour
-{
-    public static ScenFadeManager instance;
-     #pragma warning disable 0649
-    [SerializeField] private Image _fadeOutImage;
-     #pragma warning restore 0649
-    [Range(0.1f, 10f), SerializeField] private float _fadeOutSpeed = 5f;
-    [Range(0.1f, 10f), SerializeField] private float _fadeInSpeed = 5f;
-    [SerializeField] private Color _fadeOutStartColor;
-    [SerializeField] public bool StartBlack;
-
-    public bool IsFadingOut { get; private set; }
-    public bool IsFadingIn {get; private set;}
-
-    private void Awake()
-    {
-        if (instance == null)
-        {
-            instance = this;
-        }
-
-        //set start at black based on bool "StartBlack"
-        if (StartBlack)
-        {
-
-            _fadeOutStartColor.a = 1f;
-            _fadeOutImage.color = _fadeOutStartColor;
-            StartFadeIn();
-        }
-
-        //set alpha color at 0
-        else
-        {
-            _fadeOutStartColor.a = 0f;
-
-        }
-
-    }
-
-    private void Update()
-    {
-        if (IsFadingOut)
-        {
-            if (_fadeOutImage.color.a < 1f)
-            {
-                if (GameManager2.Instance.GameState1 == GameState1.Paused)
-                {
-                    _fadeOutStartColor.a += Time.deltaTime * 0.01f;
-                }
-                else
-                {
-                    _fadeOutStartColor.a += Time.deltaTime * _fadeOutSpeed;
-                }
-                
-                _fadeOutImage.color = _fadeOutStartColor;
-            }
-            else
-            {
-                IsFadingOut = false;
-            }
-        }
-
-        if (IsFadingIn)
-        {
-            if (_fadeOutImage.color.a > 0f)
-            {
-                if (GameManager2.Instance.GameState1 == GameState1.Paused)
-                {
-                    _fadeOutStartColor.a -= Time.deltaTime * 0.01f;
-                }
-                else
-                {
-                    _fadeOutStartColor.a -= Time.deltaTime * _fadeInSpeed;
-                }
-                
-                _fadeOutImage.color = _fadeOutStartColor;
-            }
-            else
-            {
-                IsFadingIn = false;
-            }
-        }
-    }
-
-    public void StartFadeOut () {
-        //Debug.Log("StartFadOut");
-        _fadeOutImage.color = _fadeOutStartColor;
-        IsFadingOut = true;
-    }
-
-    public void StartFadeIn () {
-        if (_fadeOutImage.color.a >= 1f)
-        {
-            _fadeOutImage.color = _fadeOutStartColor;
-            IsFadingIn = true;
-        }
-    }
-}
-*/

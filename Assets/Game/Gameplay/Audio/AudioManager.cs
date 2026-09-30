@@ -7,14 +7,13 @@ using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Gameplay.Audio
 {
     /// <summary>
-    /// Playback executor. Responds to PlayMusic/StopMusic/PlaySFX messages.
-    /// Volume is owned by IAudioMixer — this class only handles WHAT plays and WHEN.
+    /// High-level audio manager. Routes music and SFX through AudioView,
+    /// handles time-scale ducking, and exposes the IAudioManager interface.
     /// </summary>
     public class AudioManager : IAudioManager, IStartable, IDisposable
     {
@@ -22,11 +21,11 @@ namespace Game.Gameplay.Audio
 
         private readonly AudioConfigSO _config;
         private readonly AudioView _view;
-
-        private ISubscriber<TimeScalePause> _pauseSub;
-        private ISubscriber<TimeScaleResume> _resumeSub;
-        private ISubscriber<StopMusic> _stopMusicSub;
-        private ISubscriber<PlayMusic> _playMusicSub;
+        private readonly IAudioMixer _mixer;
+        private readonly ISubscriber<TimeScalePause> _pauseSub;
+        private readonly ISubscriber<TimeScaleResume> _resumeSub;
+        private readonly ISubscriber<StopMusic> _stopMusicSub;
+        private readonly ISubscriber<PlayMusic> _playMusicSub;
 
         #endregion
 
@@ -41,17 +40,29 @@ namespace Game.Gameplay.Audio
         private AudioSource[] _activeMusicSources = Array.Empty<AudioSource>();
         private MusicType _currentMusicType = MusicType.None;
         private int _musicGeneration;
+        private float _preDuckMusicVolume = 1f;
         private bool _disposed;
 
         #endregion
 
         #region Construction
 
-        [Inject]
-        public AudioManager(AudioConfigSO config, AudioView view)
+        public AudioManager(
+            AudioConfigSO config,
+            AudioView view,
+            IAudioMixer mixer,
+            ISubscriber<TimeScalePause> pauseSub,
+            ISubscriber<TimeScaleResume> resumeSub,
+            ISubscriber<StopMusic> stopMusicSub,
+            ISubscriber<PlayMusic> playMusicSub)
         {
             _config = config;
             _view = view;
+            _mixer = mixer;
+            _pauseSub = pauseSub;
+            _resumeSub = resumeSub;
+            _stopMusicSub = stopMusicSub;
+            _playMusicSub = playMusicSub;
         }
 
         #endregion
@@ -61,11 +72,6 @@ namespace Game.Gameplay.Audio
         void IStartable.Start()
         {
             if (_disposed) return;
-
-            _pauseSub = GlobalMessagePipe.GetSubscriber<TimeScalePause>();
-            _resumeSub = GlobalMessagePipe.GetSubscriber<TimeScaleResume>();
-            _stopMusicSub = GlobalMessagePipe.GetSubscriber<StopMusic>();
-            _playMusicSub = GlobalMessagePipe.GetSubscriber<PlayMusic>();
 
             InitializeClips();
             SetupMixerGroups();
@@ -131,6 +137,12 @@ namespace Game.Gameplay.Audio
 
             if (_clips.TryGetValue(soundType, out var clip))
             {
+                if (clip == null)
+                {
+                    Debug.LogWarning($"[Audio] SFX '{soundType}' has no clip and no fallback.");
+                    return;
+                }
+
                 bool loop = _sfxLoops.TryGetValue(soundType, out var l) && l;
                 float pitch = _sfxPitchRanges.TryGetValue(soundType, out var range)
                     ? UnityEngine.Random.Range(range.min, range.max)
@@ -153,7 +165,8 @@ namespace Game.Gameplay.Audio
         public void StopSFX(SoundType soundType)
         {
             if (_disposed) return;
-            if (_clips.TryGetValue(soundType, out var clip))
+
+            if (_clips.TryGetValue(soundType, out var clip) && clip != null)
                 _view.StopSFX(clip);
         }
 
@@ -167,26 +180,22 @@ namespace Game.Gameplay.Audio
 
         #region Internal: Music
 
-        private async UniTaskVoid PlayMusicTracks(List<MusicTrack> tracks, int generation)
+        private async UniTask PlayMusicTracks(List<MusicTrack> tracks, int generation)
         {
-            try
+            _activeMusicSources = new AudioSource[tracks.Count];
+
+            for (int i = 0; i < tracks.Count; i++)
             {
-                _activeMusicSources = new AudioSource[tracks.Count];
+                if (generation != _musicGeneration) return;
+                if (tracks[i].clip == null) continue;
 
-                for (int i = 0; i < tracks.Count; i++)
-                {
-                    if (generation != _musicGeneration) return;
-                    if (tracks[i].clip == null) continue;
+                if (tracks[i].delay > 0f)
+                    await UniTask.Delay((int)(tracks[i].delay * 1000), ignoreTimeScale: true);
 
-                    if (tracks[i].delay > 0f)
-                        await UniTask.Delay((int)(tracks[i].delay * 1000), ignoreTimeScale: true);
+                if (generation != _musicGeneration) return;
 
-                    if (generation != _musicGeneration) return;
-
-                    _activeMusicSources[i] = _view.PlayMusic(tracks[i].clip, tracks[i].loop, tracks[i].volume);
-                }
+                _activeMusicSources[i] = _view.PlayMusic(tracks[i].clip, tracks[i].loop, tracks[i].volume);
             }
-            catch (OperationCanceledException) { }
         }
 
         #endregion
@@ -202,8 +211,9 @@ namespace Game.Gameplay.Audio
 
             if (_config.audioClips != null)
             {
-                foreach (var entry in _config.audioClips)
+                for (int i = 0; i < _config.audioClips.Count; i++)
                 {
+                    var entry = _config.audioClips[i];
                     _clips[entry.soundType] = entry.clip ?? _config.fallbackClip;
                     _sfxLoops[entry.soundType] = entry.loop;
                 }
@@ -211,8 +221,8 @@ namespace Game.Gameplay.Audio
 
             if (_config.musicClips != null)
             {
-                foreach (var entry in _config.musicClips)
-                    _musicTracks[entry.type] = entry.tracks;
+                for (int i = 0; i < _config.musicClips.Count; i++)
+                    _musicTracks[_config.musicClips[i].type] = _config.musicClips[i].tracks;
             }
         }
 
@@ -236,16 +246,13 @@ namespace Game.Gameplay.Audio
 
         private void OnTimeScalePause(TimeScalePause _)
         {
-            if (_config.audioMixer == null) return;
-            float ducked = _config.musicDuckVolume;
-            float db = ducked > 0.001f ? 20f * Mathf.Log10(ducked) : -80f;
-            _config.audioMixer.SetFloat("MusicVolume", db);
+            _preDuckMusicVolume = _mixer.MusicVolume;
+            _mixer.MusicVolume = _config.musicDuckVolume;
         }
 
         private void OnTimeScaleResume(TimeScaleResume _)
         {
-            // Restore mixer to whatever IAudioMixer currently holds
-            // (AudioMixerMaster.MusicVolume setter already pushed the correct value)
+            _mixer.MusicVolume = _preDuckMusicVolume;
         }
 
         private void OnPlayMusic(PlayMusic msg) => PlayMusic(msg.Clip, msg.Restart);
@@ -259,8 +266,8 @@ namespace Game.Gameplay.Audio
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 

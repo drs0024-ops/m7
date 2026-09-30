@@ -63,6 +63,15 @@ namespace Game.Core.Messages
     #endregion
 
     #region Levels
+    public readonly struct SceneUnloading
+    {
+        public string SceneName { get; }
+
+        public SceneUnloading(string sceneName)
+        {
+            SceneName = sceneName;
+        }
+    }
 
     public readonly struct LevelCompleteSignal
     {

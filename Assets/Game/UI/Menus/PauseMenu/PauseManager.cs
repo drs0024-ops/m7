@@ -31,6 +31,12 @@ namespace Game.UI
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
         [Inject] private SceneRegistry _sceneRegistry;
+        [Inject] private IPublisher<ResumeGameRequested> _resumePublisher;
+        [Inject] private IPublisher<NavigateToMenu> _navigateToMenuPublisher;
+        [Inject] private IPublisher<OptionsOpenRequested> _optionsOpenPublisher;
+        [Inject] private ISubscriber<GamePaused> _pausedSub;
+        [Inject] private ISubscriber<GameResumed> _resumedSub;
+        [Inject] private ISubscriber<GameStarted> _startedSub;
 
         #endregion
 
@@ -44,17 +50,7 @@ namespace Game.UI
         private float _blinkTimer;
         private bool _cursorVisible = true;
         private bool _disposed;
-
-        private IPublisher<ResumeGameRequested> _resumePublisher;
-        private IPublisher<NavigateToMenu> _navigateToMenuPublisher;
-        private IPublisher<OptionsOpenRequested> _optionsOpenPublisher;
         private readonly List<IDisposable> _subscriptions = new(3);
-
-        #endregion
-
-        #region Construction
-
-        public PauseManager() { }
 
         #endregion
 
@@ -65,6 +61,7 @@ namespace Game.UI
             if (_lineTexts == null || _lineTexts.Length == 0)
             {
                 Debug.LogError("[PauseManager] _lineTexts not assigned!", this);
+                enabled = false;
                 return;
             }
 
@@ -75,26 +72,22 @@ namespace Game.UI
                 _lineTexts[i].text = string.Empty;
             }
 
-            // Subscriptions in Awake (root is active)
-            _resumePublisher = GlobalMessagePipe.GetPublisher<ResumeGameRequested>();
-            _navigateToMenuPublisher = GlobalMessagePipe.GetPublisher<NavigateToMenu>();
-            _optionsOpenPublisher = GlobalMessagePipe.GetPublisher<OptionsOpenRequested>();
-
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<GamePaused>()
-                .Subscribe(_ => OpenPauseMenu()));
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<GameResumed>()
-                .Subscribe(_ => ClosePauseMenu()));
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<GameStarted>()
-                .Subscribe(_ => ClosePauseMenu()));
-
-            // Start hidden
             _panelOpen = false;
             SetVisualActive(false);
         }
 
+        private void Start()
+        {
+            if (!enabled) return;
+
+            _subscriptions.Add(_pausedSub.Subscribe(_ => OpenPauseMenu()));
+            _subscriptions.Add(_resumedSub.Subscribe(_ => ClosePauseMenu()));
+            _subscriptions.Add(_startedSub.Subscribe(_ => ClosePauseMenu()));
+        }
+
         private void OnDestroy()
         {
-            if (!_disposed) Dispose();
+            Dispose();
         }
 
         #endregion
@@ -218,7 +211,8 @@ namespace Game.UI
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var d in _subscriptions) d?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 

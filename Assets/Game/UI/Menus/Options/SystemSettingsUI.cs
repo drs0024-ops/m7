@@ -8,6 +8,11 @@ using Game.Gameplay.Save;
 
 namespace Game.UI
 {
+    /// <summary>
+    /// System settings sub-panel: input device, text speed, auto-save,
+    /// difficulty, language, reduce flashing, show FPS, CRT mode, delete save.
+    /// Activated/deactivated by OptionsMenuController.
+    /// </summary>
     public class SystemSettingsUI : MonoBehaviour
     {
         [System.Serializable]
@@ -23,16 +28,18 @@ namespace Game.UI
 
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
-        [Inject] private SettingsSavable _settings;
+        [Inject] private IPublisher<DeleteSaveRequested> _deleteSavePublisher;
+
 
         [Header("Settings")]
         [SerializeField] private SettingRow[] _rows;
         [SerializeField] private float _blinkInterval = 0.5f;
-        [SerializeField] private int[] _defaultIndices = { 0, 1, 0, 1, 0, 1, 1, 0 };   
+        [SerializeField] private int[] _defaultIndices = { 0, 1, 0, 1, 0, 1, 1, 0 };
 
         private IPublisher<SaveRequest> _savePublisher;
         private IPublisher<CRTModeChanged> _crtModePublisher;
         private IPublisher<CRTIntensityChanged> _crtIntensityPublisher;
+        private IObjectResolver _container;
 
         private string[][] _options;
         private int[] _valueIndices;
@@ -42,6 +49,7 @@ namespace Game.UI
         private int _selectedRow;
         private bool _enabled;
         private bool _deleteConfirming;
+        private bool _dirty;
 
         private bool _upHeld, _downHeld, _leftHeld, _rightHeld;
         private float _blinkTimer;
@@ -53,13 +61,17 @@ namespace Game.UI
 
         [Inject]
         public void Construct(
+            InputManager inputManager,
             IPublisher<SaveRequest> savePublisher,
             IPublisher<CRTModeChanged> crtModePublisher,
-            IPublisher<CRTIntensityChanged> crtIntensityPublisher)
+            IPublisher<CRTIntensityChanged> crtIntensityPublisher,
+            IObjectResolver container)
         {
+            _inputManager = inputManager;
             _savePublisher = savePublisher;
             _crtModePublisher = crtModePublisher;
             _crtIntensityPublisher = crtIntensityPublisher;
+            _container = container;
         }
 
         #endregion
@@ -71,6 +83,7 @@ namespace Game.UI
             if (_rows == null || _rows.Length == 0)
             {
                 Debug.LogError("[SystemSettings] _rows not assigned!", this);
+                enabled = false;
                 return;
             }
 
@@ -89,57 +102,51 @@ namespace Game.UI
             // ── Row 0: Input Device (Cycle) ──
             _options[0] = new[] { "KEYBOARD", "GAMEPAD", "AUTO" };
             _rowTypes[0] = RowType.Cycle;
-            _valueIndices[0] = 0;
 
             // ── Row 1: Text Speed (Cycle) ──
             _options[1] = new[] { "SLOW", "NORMAL", "FAST", "INSTANT" };
             _rowTypes[1] = RowType.Cycle;
-            _valueIndices[1] = 1;
 
             // ── Row 2: Auto-Save (Toggle) ──
             _options[2] = new[] { "ON", "OFF" };
             _rowTypes[2] = RowType.Toggle;
-            _valueIndices[2] = 0;
 
             // ── Row 3: Difficulty (Cycle) ──
             _options[3] = new[] { "EASY", "NORMAL", "HARD" };
             _rowTypes[3] = RowType.Cycle;
-            _valueIndices[3] = 1;
 
             // ── Row 4: Language (Cycle) ──
             _options[4] = new[] { "ENGLISH", "SPANISH", "FRENCH", "GERMAN", "JAPANESE" };
             _rowTypes[4] = RowType.Cycle;
-            _valueIndices[4] = 0;
 
             // ── Row 5: Reduce Flashing (Toggle) ──
             _options[5] = new[] { "ON", "OFF" };
             _rowTypes[5] = RowType.Toggle;
-            _valueIndices[5] = 1;
 
             // ── Row 6: Show FPS (Toggle) ──
             _options[6] = new[] { "ON", "OFF" };
             _rowTypes[6] = RowType.Toggle;
-            _valueIndices[6] = 1;
 
             // ── Row 7: CRT Effect (Cycle) ──
             _options[7] = new[] { "ALWAYS", "MENU ONLY", "OFF" };
             _rowTypes[7] = RowType.Cycle;
-            _valueIndices[7] = 0;
 
             // ── Row 8: Delete Save (Action) ──
             _options[8] = new[] { "[PRESS ENTER]" };
             _rowTypes[8] = RowType.Action;
-            _valueIndices[8] = 0;
 
             for (int i = 0; i < _valueIndices.Length; i++)
-                 _valueIndices[i] = i < _defaultIndices.Length ? _defaultIndices[i] : 0;   
+                _valueIndices[i] = i < _defaultIndices.Length ? _defaultIndices[i] : 0;
 
             _selectedRow = 0;
         }
 
         private void OnEnable()
         {
+            if (!enabled) return;
+
             _enabled = true;
+            _dirty = false;
             _upHeld = _downHeld = _leftHeld = _rightHeld = false;
             _blinkTimer = 0f;
             _cursorVisible = true;
@@ -150,7 +157,8 @@ namespace Game.UI
         private void OnDisable()
         {
             _enabled = false;
-            _savePublisher.Publish(new SaveRequest("SystemSettings", false));
+            if (_dirty)
+                _savePublisher.Publish(new SaveRequest("SystemSettings", false));
         }
 
         #endregion
@@ -169,19 +177,17 @@ namespace Game.UI
             bool left = x < -0.5f;
             bool right = x > 0.5f;
 
-            // Row navigation (edge-detected)
             if (up && !_upHeld)
                 SelectRow(_selectedRow - 1);
             else if (down && !_downHeld)
                 SelectRow(_selectedRow + 1);
 
-            // Value adjustment
             if (_deleteConfirming)
             {
                 if (left && !_leftHeld)
-                    _valueIndices[_selectedRow] = 0; // N
+                    _valueIndices[_selectedRow] = 0;
                 else if (right && !_rightHeld)
-                    _valueIndices[_selectedRow] = 1; // Y
+                    _valueIndices[_selectedRow] = 1;
 
                 if (_inputManager.ConfirmWasPressed)
                 {
@@ -220,7 +226,6 @@ namespace Game.UI
             _leftHeld = left;
             _rightHeld = right;
 
-            // Blink cursor
             _blinkTimer += Time.unscaledDeltaTime;
             if (_blinkTimer >= _blinkInterval)
             {
@@ -251,6 +256,7 @@ namespace Game.UI
         {
             int count = _options[_selectedRow].Length;
             _valueIndices[_selectedRow] = (_valueIndices[_selectedRow] + direction + count) % count;
+            _dirty = true;
             UpdateRow(_selectedRow);
             ApplyRow(_selectedRow);
         }
@@ -260,20 +266,17 @@ namespace Game.UI
             _deleteConfirming = true;
             _valueIndices[_selectedRow] = 0;
             _rows[_selectedRow].valueText.text = "Delete? N █";
-            Debug.Log("[SystemSettings] Delete confirm entered.");
         }
 
         private void ConfirmDelete()
         {
-            UnityEngine.PlayerPrefs.DeleteAll();
-            UnityEngine.PlayerPrefs.Save();
-            Debug.Log("[SystemSettings] Save data deleted.");
+             _deleteSavePublisher.Publish(DeleteSaveRequested.Default);
         }
 
         private void Save()
         {
             _savePublisher.Publish(new SaveRequest("SystemSettings", false));
-            Debug.Log("[SystemSettings] Saved.");
+            _dirty = false;
         }
 
         #endregion
@@ -282,26 +285,26 @@ namespace Game.UI
 
         private void ApplyRow(int row)
         {
-            switch (row)
+            if (row == 7)
             {
-                case 7: // CRT Effect
-    switch (_valueIndices[row])
-            {
-                case 0:
-                    _crtModePublisher.Publish(new CRTModeChanged(false));
-                    _crtIntensityPublisher.Publish(new CRTIntensityChanged(1f));
-                    break;
-                case 1:
-                    _crtModePublisher.Publish(new CRTModeChanged(true));
-                    break;
-                case 2:
-                    _crtIntensityPublisher.Publish(new CRTIntensityChanged(0f));
-                    break;
+                switch (_valueIndices[row])
+                {
+                    case 0:
+                        _crtModePublisher.Publish(new CRTModeChanged(false));
+                        _crtIntensityPublisher.Publish(new CRTIntensityChanged(1f));
+                        break;
+                    case 1:
+                        _crtModePublisher.Publish(new CRTModeChanged(true));
+                        break;
+                    case 2:
+                        _crtIntensityPublisher.Publish(new CRTIntensityChanged(0f));
+                        break;
+                }
             }
-            break;
-            }
-            _settings.SetSystem(_valueIndices[0], _valueIndices[1], _valueIndices[2], _valueIndices[3], _valueIndices[4], _valueIndices[5], _valueIndices[6], _valueIndices[7]);
-
+            
+            _container.Resolve<SettingsSavable>().SetSystem(
+                _valueIndices[0], _valueIndices[1], _valueIndices[2], _valueIndices[3],
+                _valueIndices[4], _valueIndices[5], _valueIndices[6], _valueIndices[7]);
         }
 
         #endregion

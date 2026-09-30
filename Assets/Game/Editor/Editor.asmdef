@@ -5,12 +5,13 @@
         "Bootstrap",
         "Core",
         "Gameplay",
+        "Unity.Cinemachine",
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "VContainer",
         "UI"
     ],
-    "autoReferenced": true,
+    "autoReferenced": false,
     "overrideReferences": true,
-    "precompiledReferences": [],
-    "defineConstraints": ["UNITY_EDITOR"],
-    "versionDefines": [],
-    "noEngineReferences": false
+    "defineConstraints": ["UNITY_EDITOR"]
 }   

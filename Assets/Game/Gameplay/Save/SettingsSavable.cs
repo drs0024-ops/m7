@@ -3,16 +3,17 @@ using Game.Core.Interfaces;
 using Game.Core.Data;
 using Game.Gameplay.Player;
 using UnityEngine.InputSystem;
-using VContainer;
+using VContainer.Unity;
 
 namespace Game.Gameplay.Save
 {
-    public class SettingsSavable : ISaveable, IDisposable
+    public class SettingsSavable : ISaveable, IStartable, IDisposable
     {
         private const string SAVE_ID = "Settings";
 
         private readonly IAudioMixer _mixer;
         private readonly InputManager _inputManager;
+        private readonly ISaveableRegistry _registry;
 
         // Audio
         private float _masterVolume = 1f;
@@ -38,6 +39,8 @@ namespace Game.Gameplay.Save
         private int _showFPS = 1;
         private int _crtMode = 0;
 
+        public int GetTextSpeed() => _textSpeed;
+        
         // Controls (8 binding paths)
         private string[] _bindingPaths = {
             "<Keyboard>/w", "<Keyboard>/s", "<Keyboard>/a", "<Keyboard>/d",
@@ -45,13 +48,22 @@ namespace Game.Gameplay.Save
         };
 
         private bool _disposed;
-
-        [Inject]
-        public SettingsSavable(IAudioMixer mixer, InputManager inputManager)
+        
+        public SettingsSavable(IAudioMixer mixer, InputManager inputManager, ISaveableRegistry registry)
         {
             _mixer = mixer;
             _inputManager = inputManager;
+            _registry = registry;
         }
+
+        #region IStartable
+
+        void IStartable.Start()
+        {
+            _registry.Register(this);
+        }
+        
+        #endregion
 
         public string SaveId => SAVE_ID;
 
@@ -223,7 +235,9 @@ namespace Game.Gameplay.Save
 
         public void Dispose()
         {
+            if (_disposed) return;
             _disposed = true;
+            _registry.Unregister(this);
         }
 
         #endregion

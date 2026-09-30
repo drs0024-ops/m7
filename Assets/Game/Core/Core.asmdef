@@ -5,13 +5,11 @@
         "MessagePipe",
         "MessagePipe.VContainer",
         "VContainer",
-        "UniTask",
-        "LeanTween"
+        "UniTask"
     ],
-    "autoReferenced": true,
+    "autoReferenced": false,
     "overrideReferences": true,
-    "precompiledReferences": [],
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+    "precompiledReferences": [
+        "LeanTween.dll"
+    ]
 }   

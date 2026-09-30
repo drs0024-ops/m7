@@ -5,11 +5,11 @@ using Game.Core.Enums;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
-using VContainer.Unity;
+using VContainer;
 
 namespace Game.Gameplay.World
 {
-    public class DoorTriggerInteraction : TriggerInteractionBase, IStartable
+    public class DoorTriggerInteraction : TriggerInteractionBase
     {
         [SerializeField] private DoorToSpawnAt _doorToSpawnTo;
         [SerializeField] private SceneField _sceneToLoad;
@@ -19,11 +19,15 @@ namespace Game.Gameplay.World
         private readonly List<IDisposable> _subscriptions = new();
         private bool _disposed;
 
-        public DoorTriggerInteraction() { }
-
-        void IStartable.Start()
+        [Inject]
+        private void Inject(IPublisher<DoorActivated> doorActivatedPublisher)
         {
-            _doorActivatedPublisher = GlobalMessagePipe.GetPublisher<DoorActivated>();
+            _doorActivatedPublisher = doorActivatedPublisher;
+        }
+
+        void Start()
+        {
+            // no GlobalMessagePipe call needed
         }
 
         public override void Interact()

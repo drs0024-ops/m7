@@ -12,4 +12,4 @@ namespace Game.Core.Data
         public int RequiredCount;
         public float Duration;
     }
-}   
+}    

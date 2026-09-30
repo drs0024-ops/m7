@@ -34,9 +34,6 @@ namespace Game.Gameplay.Player
             _input = input;
             _cts = new CancellationTokenSource();
 
-            _deps.Rb.linearVelocity = Vector2.zero;
-            _deps.Rb.angularVelocity = 0f;
-
             _subscriptions.Add(bounceHitSubscriber.Subscribe(OnBouncePlatformHit));
 
             var root = new PlayerRoot(this, input, landedPublisher, jumpedPublisher, doubleJumpedPublisher);
@@ -95,6 +92,15 @@ namespace Game.Gameplay.Player
                 Ctx.PowerJump = true;
                 Ctx.PowerJumpMultiplier = _deps.Stats.PowerJumpMultiplier;
             }
+        }
+
+        /// <summary>
+        /// Resets physics state. Call after PlayerDependencies is fully populated.
+        /// </summary>
+        public void ResetPhysics()
+        {
+            _deps.Rb.linearVelocity = Vector2.zero;
+            _deps.Rb.angularVelocity = 0f;
         }
 
         public Collider2D GetFeetCollider() => _deps.FeetColl;

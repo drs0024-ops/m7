@@ -42,7 +42,7 @@ namespace Game.UI
                     cfg.panel.SetActive(false);
                     cfg.canvasGroup.alpha = 0f;
                     cfg.canvasGroup.blocksRaycasts = false;
-                    cfg.canvasGroup.interactable = cfg.isConstant;
+                    cfg.canvasGroup.interactable = false; // ← was cfg.isConstant (dead)
                 }
             }
         }

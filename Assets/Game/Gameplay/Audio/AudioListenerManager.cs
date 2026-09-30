@@ -4,10 +4,21 @@ using UnityEngine.SceneManagement;
 
 namespace Game.Gameplay.Audio
 {
+    /// <summary>
+    /// Ensures exactly one active AudioListener exists in the scene.
+    /// Disables any duplicate listeners introduced by additive scene loads.
+    /// </summary>
     public class AudioListenerManager : MonoBehaviour, IDisposable
     {
+        #region Fields
+
         private AudioListener _listener;
         private bool _disposed;
+        private bool _warnedInactive;
+
+        #endregion
+
+        #region Unity Lifecycle
 
         private void Awake()
         {
@@ -21,14 +32,34 @@ namespace Game.Gameplay.Audio
         private void Start()
         {
             EnforceSingleListener();
-            
         }
 
         private void Update()
         {
-            if (!_listener.isActiveAndEnabled)
+            if (!_listener.isActiveAndEnabled && !_warnedInactive)
+            {
+                _warnedInactive = true;
                 Debug.LogWarning($"[AudioListenerManager] Listener is NOT active/enabled! GO: {gameObject.name}, active: {gameObject.activeInHierarchy}");
-        }   
+            }
+            else if (_listener.isActiveAndEnabled && _warnedInactive)
+            {
+                _warnedInactive = false;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            Dispose();
+        }
+
+        #endregion
+
+        #region Public API
+
+        public void SetActive(bool active)
+        {
+            _listener.enabled = active;
+        }
 
         public void Dispose()
         {
@@ -38,15 +69,9 @@ namespace Game.Gameplay.Audio
             SceneManager.sceneLoaded -= OnSceneLoaded;
         }
 
-        private void OnDestroy()
-        {
-            if (!_disposed) Dispose();
-        }
- 
-        public void SetActive(bool active)
-        {
-            _listener.enabled = active;
-        }
+        #endregion
+
+        #region Internal
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
@@ -63,5 +88,7 @@ namespace Game.Gameplay.Audio
                     all[i].enabled = false;
             }
         }
+
+        #endregion
     }
 }   

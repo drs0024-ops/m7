@@ -4,43 +4,68 @@ using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Gameplay.Upgrades
 {
+    /// <summary>
+    /// Orchestrates upgrade pickup: validates, unlocks, applies timed effects,
+    /// and publishes downstream messages for UI, save, and player systems.
+    /// </summary>
     public class UpgradeOrchestrator : IUpgradeManager, IStartable, IDisposable
     {
-        private ISubscriber<UpgradePickedUp> _pickedUpSub;
-        private IPublisher<UpgradeActivated> _activatedPublisher;
-        private IPublisher<UpgradeUnlocked> _unlockedPublisher;
-        private IPublisher<UpgradeStateChanged> _stateChangedPublisher;
-        private IPublisher<UpgradeApplied> _appliedPublisher;
-        private IPublisher<CodeFragmentDisplayedMessage> _codePublisher;
-        
-        private IPublisher<SaveRequest> _saveRequestPublisher;
+        #region Dependencies
 
+        private readonly ISubscriber<UpgradePickedUp> _pickedUpSub;
+        private readonly IPublisher<UpgradeActivated> _activatedPublisher;
+        private readonly IPublisher<UpgradeUnlocked> _unlockedPublisher;
+        private readonly IPublisher<UpgradeStateChanged> _stateChangedPublisher;
+        private readonly IPublisher<UpgradeApplied> _appliedPublisher;
+        private readonly IPublisher<CodeFragmentDisplayedMessage> _codePublisher;
+        private readonly IPublisher<SaveRequest> _saveRequestPublisher;
         private readonly UpgradeStateManager _stateManager;
-        private readonly List<IDisposable> _subscriptions = new();
+
+        #endregion
+
+        #region State
+
+        private readonly List<IDisposable> _subscriptions = new(1);
         private bool _disposed;
 
-        [Inject]
-        public UpgradeOrchestrator(UpgradeStateManager stateManager)
+        #endregion
+
+        #region Construction
+
+        public UpgradeOrchestrator(
+            UpgradeStateManager stateManager,
+            ISubscriber<UpgradePickedUp> pickedUpSub,
+            IPublisher<UpgradeActivated> activatedPublisher,
+            IPublisher<UpgradeUnlocked> unlockedPublisher,
+            IPublisher<UpgradeStateChanged> stateChangedPublisher,
+            IPublisher<UpgradeApplied> appliedPublisher,
+            IPublisher<CodeFragmentDisplayedMessage> codePublisher,
+            IPublisher<SaveRequest> saveRequestPublisher)
         {
             _stateManager = stateManager;
+            _pickedUpSub = pickedUpSub;
+            _activatedPublisher = activatedPublisher;
+            _unlockedPublisher = unlockedPublisher;
+            _stateChangedPublisher = stateChangedPublisher;
+            _appliedPublisher = appliedPublisher;
+            _codePublisher = codePublisher;
+            _saveRequestPublisher = saveRequestPublisher;
         }
+
+        #endregion
+
+        #region IStartable
 
         void IStartable.Start()
         {
-            _pickedUpSub = GlobalMessagePipe.GetSubscriber<UpgradePickedUp>();
-            _activatedPublisher = GlobalMessagePipe.GetPublisher<UpgradeActivated>();
-            _stateChangedPublisher = GlobalMessagePipe.GetPublisher<UpgradeStateChanged>();
-            _appliedPublisher = GlobalMessagePipe.GetPublisher<UpgradeApplied>();
-            _codePublisher = GlobalMessagePipe.GetPublisher<CodeFragmentDisplayedMessage>();
-            _saveRequestPublisher = GlobalMessagePipe.GetPublisher<SaveRequest>();
-
             _subscriptions.Add(_pickedUpSub.Subscribe(OnUpgradePickedUp));
         }
+
+        #endregion
 
         #region IUpgradeManager
 
@@ -82,7 +107,7 @@ namespace Game.Gameplay.Upgrades
             if (upgrade.Duration > 0f)
                 _stateManager.StartTimedEffect(upgradeId, upgrade.Duration);
 
-            ApplyUpgradeToPlayer(upgrade);
+            NotifyUpgradeApplied(upgrade);
 
             _activatedPublisher.Publish(new UpgradeActivated(upgradeId));
             _codePublisher.Publish(new CodeFragmentDisplayedMessage(upgrade.CodeFragmentText));
@@ -90,10 +115,9 @@ namespace Game.Gameplay.Upgrades
             _saveRequestPublisher.Publish(new SaveRequest("UpgradeOrchestrator", isNew));
         }
 
-        private void ApplyUpgradeToPlayer(PlayerUpgrade upgrade)
+        private void NotifyUpgradeApplied(PlayerUpgrade upgrade)
         {
-            var player = _stateManager.CurrentPlayer;
-            if (player == null) return;
+            if (_stateManager.CurrentPlayer == null) return;
 
             _appliedPublisher.Publish(new UpgradeApplied(
                 upgrade.UpgradeID, upgrade.Duration));
@@ -108,7 +132,8 @@ namespace Game.Gameplay.Upgrades
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var d in _subscriptions) d?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 

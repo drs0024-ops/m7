@@ -4,6 +4,7 @@ using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
+using VContainer;
 
 namespace Game.Gameplay.World
 {
@@ -18,11 +19,14 @@ namespace Game.Gameplay.World
         public bool CanInteract { get; protected set; }
         public bool PlayerEnteredFromRight { get; protected set; }
 
-        public TriggerInteractionBase() {}
+        [Inject]
+        private void Inject(ISubscriber<PlayerSpawned> playerSpawnedSubscriber)
+        {
+            _playerSpawnedSubscriber = playerSpawnedSubscriber;
+        }
 
         private void Start()
         {
-            _playerSpawnedSubscriber = GlobalMessagePipe.GetSubscriber<PlayerSpawned>();
             _disposables.Add(_playerSpawnedSubscriber.Subscribe(OnPlayerSpawned));
         }
 
@@ -60,7 +64,7 @@ namespace Game.Gameplay.World
         private void OnDestroy()
         {
             if (_disposables.Count != 0)
-            Dispose();
+                Dispose();
         }
     }
 }   

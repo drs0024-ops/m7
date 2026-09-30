@@ -12,5 +12,9 @@ public class CharacterSceneConfig
     public Vector3 DefaultStartPosition = new Vector3(0, 0, 0);
 
     [Tooltip("If set (non-zero), this forces the spawn position and ignores checkpoints.")]
-    public Vector3? ForcedSpawnPosition = null; // Use nullable to easily check if it's "set"
-}
+    public Vector3? ForcedSpawnPosition = null;
+
+    [Header("Door Spawn")]
+    [Tooltip("Offset from door position when spawning at a door.")]
+    public float DoorSpawnOffset = 3f;
+}   

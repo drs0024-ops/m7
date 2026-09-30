@@ -9,13 +9,17 @@
         "MessagePipe.VContainer",
         "VContainer",
         "UniTask",
-        "LeanTween",
         "UnityEngine.UI",
         "UnityEngine.Audio",
+        "Unity.Cinemachine",
         "UnityEngine.SceneManagement",
         "Unity.InputSystem",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "LeanTween"
     ],
-    "autoReferenced": true,
-    "overrideReferences": true
+    "autoReferenced": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "LeanTween.dll"
+    ]
 }   

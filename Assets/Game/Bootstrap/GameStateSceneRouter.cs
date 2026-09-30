@@ -1,15 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
-using Cysharp.Threading.Tasks;
 using MessagePipe;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using VContainer;
 using Game.Core;
 using Game.Core.Enums;
 using Game.Core.Messages;
 using VContainer.Unity;
+using Cysharp.Threading.Tasks;
 
 namespace Game.Bootstrap
 {
@@ -23,17 +22,19 @@ namespace Game.Bootstrap
     {
         #region Dependencies
 
-        private ISubscriber<GameStateChanged> _stateChangedSub;
-        private ISubscriber<SaveRequest> _saveRequestSub;
-        private ISubscriber<SaveCompleted> _saveCompletedSub;
-        private ISubscriber<NavigateToMenu> _navigateToMenuSub;
-        private IPublisher<SaveRequest> _saveRequestPublisher;
-        private IPublisher<SceneLoadRequested> _sceneLoadPublisher;
-
+        private readonly ISubscriber<GameStateChanged> _stateChangedSub;
+        private readonly ISubscriber<SaveRequest> _saveRequestSub;
+        private readonly ISubscriber<SaveCompleted> _saveCompletedSub;
+        private readonly ISubscriber<NavigateToMenu> _navigateToMenuSub;
+        private readonly IPublisher<SaveRequest> _saveRequestPublisher;
         private readonly GameStateMachine _stateMachine;
         private readonly SceneRegistry _sceneRegistry;
         private readonly SceneLoaderService _loader;
         private readonly SceneTransitionOrchestrator _orchestrator;
+
+        #endregion
+
+        #region State
 
         private readonly List<IDisposable> _subscriptions = new(4);
         private CancellationTokenSource _cts;
@@ -47,17 +48,27 @@ namespace Game.Bootstrap
 
         #region Construction
 
-        [Inject]
+        // FIX #66: Removed unused IPublisher<SceneLoadRequested> dependency.
         public GameStateSceneRouter(
             GameStateMachine stateMachine,
             SceneRegistry sceneRegistry,
             SceneLoaderService loader,
-            SceneTransitionOrchestrator orchestrator)
+            SceneTransitionOrchestrator orchestrator,
+            ISubscriber<GameStateChanged> stateChangedSub,
+            ISubscriber<SaveRequest> saveRequestSub,
+            ISubscriber<SaveCompleted> saveCompletedSub,
+            ISubscriber<NavigateToMenu> navigateToMenuSub,
+            IPublisher<SaveRequest> saveRequestPublisher)
         {
             _stateMachine = stateMachine;
             _sceneRegistry = sceneRegistry;
             _loader = loader;
             _orchestrator = orchestrator;
+            _stateChangedSub = stateChangedSub;
+            _saveRequestSub = saveRequestSub;
+            _saveCompletedSub = saveCompletedSub;
+            _navigateToMenuSub = navigateToMenuSub;
+            _saveRequestPublisher = saveRequestPublisher;
         }
 
         #endregion
@@ -67,13 +78,6 @@ namespace Game.Bootstrap
         void IStartable.Start()
         {
             _cts = new CancellationTokenSource();
-
-            _stateChangedSub = GlobalMessagePipe.GetSubscriber<GameStateChanged>();
-            _saveRequestSub = GlobalMessagePipe.GetSubscriber<SaveRequest>();
-            _saveCompletedSub = GlobalMessagePipe.GetSubscriber<SaveCompleted>();
-            _navigateToMenuSub = GlobalMessagePipe.GetSubscriber<NavigateToMenu>();
-            _saveRequestPublisher = GlobalMessagePipe.GetPublisher<SaveRequest>();
-            _sceneLoadPublisher = GlobalMessagePipe.GetPublisher<SceneLoadRequested>();
 
             _subscriptions.Add(_stateChangedSub.Subscribe(OnStateChanged));
             _subscriptions.Add(_saveRequestSub.Subscribe(OnSaveRequested));
@@ -94,8 +98,8 @@ namespace Game.Bootstrap
             _cts?.Dispose();
             _cts = null;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 
@@ -114,10 +118,32 @@ namespace Game.Bootstrap
                     HandleIntroAsync(_cts.Token).Forget();
                     break;
                 case GameState.QuitGame:
-                    Application.Quit();
+                    QuitApplication();
                     break;
             }
-}
+        }
+
+        // FIX #65: Editor-safe quit
+        private static void QuitApplication()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        #endregion
+
+        #region Navigation Handlers
+
+        private void OnNavigateToMenu(NavigateToMenu msg)
+        {
+            if (_stateMachine.CurrentState == GameState.MainMenu)
+                return;
+
+            _stateMachine.TransitionTo(GameState.MainMenu);
+        }
 
         #endregion
 
@@ -125,7 +151,9 @@ namespace Game.Bootstrap
 
         private void OnSaveRequested(SaveRequest msg)
         {
-            _isSaveComplete = false;
+            // FIX #63: Do NOT reset _isSaveComplete here.
+            // The caller (HandleMainMenuAsync) sets it to false BEFORE publishing,
+            // eliminating the re-entrancy race.
             _saveTimeoutCts?.Cancel();
             _saveTimeoutCts?.Dispose();
             _saveTimeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -138,42 +166,37 @@ namespace Game.Bootstrap
 
         #endregion
 
-        #region Navigation Handlers
-
-        private void OnNavigateToMenu(NavigateToMenu msg)
-        {
-            if (_stateMachine.CurrentState == GameState.MainMenu)
-                return;  // ← Already on MainMenu. The GameStateChanged publish already triggered the load.
-
-            _stateMachine.TransitionTo(GameState.MainMenu);
-            // SetState → publishes GameStateChanged(MainMenu) → HandleMainMenuAsync fires
-        }
-
-        #endregion
-
         #region Transition Logic
 
         private async UniTask HandleMainMenuAsync(CancellationToken token)
         {
             if (_isTransitioning) return;
 
-            // Already on the target scene — nothing to do
             if (SceneManager.GetActiveScene().name == _sceneRegistry.MainMenuScene) return;
 
             _isTransitioning = true;
-            _isSaveComplete = false;
+            _isSaveComplete = false;  // FIX #63: Set here, not in OnSaveRequested
 
             try
             {
                 string activeScene = SceneManager.GetActiveScene().name;
+                // FIX #67: Use registry instead of hardcoded "Bootstrap"
                 bool isFromGameplay = activeScene != _sceneRegistry.MainMenuScene
-                                   && activeScene != "Bootstrap";
+                                   && activeScene != _sceneRegistry.PersistentScene;
 
                 if (isFromGameplay)
                 {
+                    // Save with timeout — timeout does NOT block the transition
                     _saveRequestPublisher.Publish(new SaveRequest("SceneRouter", true));
-                    await UniTask.WaitUntil(() => _isSaveComplete)
-                        .AttachExternalCancellation(_saveTimeoutCts.Token);
+                    try
+                    {
+                        await UniTask.WaitUntil(() => _isSaveComplete)
+                            .AttachExternalCancellation(_saveTimeoutCts.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        Debug.LogWarning("[SceneRouter] Save timed out, proceeding without save.");
+                    }
                 }
 
                 token.ThrowIfCancellationRequested();
@@ -185,7 +208,8 @@ namespace Game.Bootstrap
                         onComplete: null,
                         spawnAtDoor: false,
                         door: DoorToSpawnAt.None,
-                        fromRight: false);
+                        fromRight: false,
+                        sourceSceneToUnload: activeScene);
                 }
                 else
                 {
@@ -194,7 +218,7 @@ namespace Game.Bootstrap
             }
             catch (OperationCanceledException)
             {
-                // Save timeout or scope disposed — proceed without save
+                // Scope disposed — abort
             }
             catch (Exception e)
             {
@@ -208,13 +232,24 @@ namespace Game.Bootstrap
 
         private async UniTask HandleIntroAsync(CancellationToken token)
         {
-            await _orchestrator.TransitionAsync(
-                sceneName: _sceneRegistry.IntroScene,
-                onComplete: null,
-                spawnAtDoor: false,
-                door: DoorToSpawnAt.None,
-                fromRight: false,
-                sourceSceneToUnload: _sceneRegistry.MainMenuScene);
+            // FIX #64: Guard against re-entrant transitions
+            if (_isTransitioning) return;
+
+            _isTransitioning = true;
+            try
+            {
+                await _orchestrator.TransitionAsync(
+                    sceneName: _sceneRegistry.IntroScene,
+                    onComplete: null,
+                    spawnAtDoor: false,
+                    door: DoorToSpawnAt.None,
+                    fromRight: false,
+                    sourceSceneToUnload: _sceneRegistry.MainMenuScene);
+            }
+            finally
+            {
+                _isTransitioning = false;
+            }
         }
 
         #endregion

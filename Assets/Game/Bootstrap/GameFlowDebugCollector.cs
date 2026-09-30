@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Game.Core.Enums;
 using Game.Core.Messages;
 using MessagePipe;
-using VContainer;
 using VContainer.Unity;
 
 namespace Game.Bootstrap
@@ -12,38 +11,61 @@ namespace Game.Bootstrap
     /// <summary>
     /// Editor-only collector that subscribes to game flow messages
     /// and populates GameFlowDebugInfo for the debug window.
-    /// Registered in the Bootstrap VContainer scope.
+    /// Registered as an entry point in the Bootstrap scope.
     /// </summary>
     public class GameFlowDebugCollector : IStartable, IDisposable
     {
-        private readonly List<IDisposable> _subscriptions = new();
-        private bool _disposed;
-        private GameState _lastState = GameState.MainMenu;
+        #region Dependencies
+
+        private readonly ISubscriber<GameStateChanged> _stateSub;
+        private readonly ISubscriber<GamePhaseChangedMessage> _phaseSub;
+        private readonly ISubscriber<SceneTransitionStarted> _transStartSub;
+        private readonly ISubscriber<SceneTransitionCompleted> _transCompleteSub;
         private readonly GameStateMachine _stateMachine;
 
-		[Inject]
-		public GameFlowDebugCollector(GameStateMachine stateMachine)
+        #endregion
+
+        #region State
+
+        private readonly List<IDisposable> _subscriptions = new(4);
+        private bool _disposed;
+        private GameState _lastState = GameState.MainMenu;
+
+        #endregion
+
+        #region Construction
+
+        public GameFlowDebugCollector(
+            GameStateMachine stateMachine,
+            ISubscriber<GameStateChanged> stateSub,
+            ISubscriber<GamePhaseChangedMessage> phaseSub,
+            ISubscriber<SceneTransitionStarted> transStartSub,
+            ISubscriber<SceneTransitionCompleted> transCompleteSub)
         {
             _stateMachine = stateMachine;
+            _stateSub = stateSub;
+            _phaseSub = phaseSub;
+            _transStartSub = transStartSub;
+            _transCompleteSub = transCompleteSub;
         }
+
+        #endregion
+
+        #region IStartable
 
         void IStartable.Start()
         {
-            // Sync initial state (handles IStartable ordering race)
             GameFlowDebugInfo.CurrentState = _stateMachine.CurrentState;
 
-            var stateSub = GlobalMessagePipe.GetSubscriber<GameStateChanged>();
-            _subscriptions.Add(stateSub.Subscribe(OnStateChanged));
+            _subscriptions.Add(_stateSub.Subscribe(OnStateChanged));
+            _subscriptions.Add(_phaseSub.Subscribe(OnPhaseChanged));
+            _subscriptions.Add(_transStartSub.Subscribe(_ => GameFlowDebugInfo.IsTransitioning = true));
+            _subscriptions.Add(_transCompleteSub.Subscribe(_ => GameFlowDebugInfo.IsTransitioning = false));
+        }
 
-            var phaseSub = GlobalMessagePipe.GetSubscriber<GamePhaseChangedMessage>();
-            _subscriptions.Add(phaseSub.Subscribe(OnPhaseChanged));
+        #endregion
 
-            var transStartSub = GlobalMessagePipe.GetSubscriber<SceneTransitionStarted>();
-            _subscriptions.Add(transStartSub.Subscribe(_ => GameFlowDebugInfo.IsTransitioning = true));
-
-            var transCompleteSub = GlobalMessagePipe.GetSubscriber<SceneTransitionCompleted>();
-            _subscriptions.Add(transCompleteSub.Subscribe(_ => GameFlowDebugInfo.IsTransitioning = false));
-        }   
+        #region Message Handlers
 
         private void OnStateChanged(GameStateChanged msg)
         {
@@ -67,15 +89,21 @@ namespace Game.Bootstrap
             };
         }
 
+        #endregion
+
+        #region IDisposable
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
+
+        #endregion
     }
 }
 #endif   

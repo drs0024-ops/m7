@@ -1,36 +1,43 @@
 using System;
 using System.Collections.Generic;
+using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
 using VContainer;
-using VContainer.Unity;
 
 namespace Game.Gameplay.Upgrades
 {
-    public class InvisibilityInputHandler : MonoBehaviour, IStartable, IDisposable
+    public class InvisibilityInputHandler : MonoBehaviour, IDisposable
     {
         private IPublisher<InvisibilityToggleRequested> _togglePublisher;
         private ISubscriber<UpgradeStateChanged> _upgradeStateChangedSubscriber;
+        private IInputState _input;
+
         private readonly List<IDisposable> _subscriptions = new();
         private bool _isUpgradeUnlocked;
         private bool _isDisposed;
 
         [Inject]
-        public InvisibilityInputHandler()
+        private void Inject(
+            IPublisher<InvisibilityToggleRequested> togglePublisher,
+            ISubscriber<UpgradeStateChanged> upgradeStateChangedSubscriber,
+            IInputState input)
         {
+            _togglePublisher = togglePublisher;
+            _upgradeStateChangedSubscriber = upgradeStateChangedSubscriber;
+            _input = input;
         }
 
-        void IStartable.Start()
+        private void Start()
         {
-            _togglePublisher = GlobalMessagePipe.GetPublisher<InvisibilityToggleRequested>();
-            _upgradeStateChangedSubscriber = GlobalMessagePipe.GetSubscriber<UpgradeStateChanged>();
             _subscriptions.Add(_upgradeStateChangedSubscriber.Subscribe(OnUpgradeStateChange));
         }
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.C))
+            if (_input == null) return;
+            if (_input.InvisibilityWasPressed)
                 HandleInputPress();
         }
 

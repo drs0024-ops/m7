@@ -4,6 +4,8 @@ using Game.Core.Messages;
 using MessagePipe;
 using TMPro;
 using UnityEngine;
+using VContainer;
+using VContainer.Unity;
 
 namespace Game.Bootstrap
 {
@@ -16,8 +18,11 @@ namespace Game.Bootstrap
     {
         #region Dependencies
 
+        [Inject]
         private ISubscriber<SceneTransitionStarted> _startedSub;
+        [Inject]
         private ISubscriber<SceneTransitionCompleted> _completedSub;
+        [Inject]
         private ISubscriber<SceneLoadProgress> _progressSub;
 
         #endregion
@@ -30,9 +35,9 @@ namespace Game.Bootstrap
         [SerializeField] private TextMeshProUGUI _barText;
         [SerializeField] private TextMeshProUGUI _valueText;
 
-		[Header("Cursor")]
-		[SerializeField] private bool _showCursor = false;
-		[SerializeField] private float _blinkInterval = 0.5f;
+        [Header("Cursor")]
+        [SerializeField] private bool _showCursor = false;
+        [SerializeField] private float _blinkInterval = 0.5f;
 
         [Header("Bar")]
         [SerializeField] private int _barCharCount = 20;
@@ -40,16 +45,18 @@ namespace Game.Bootstrap
         [Header("Animation")]
         [SerializeField] private float _fadeDuration = 0.25f;
 
+        private CanvasGroup _canvasGroup;
+
         #endregion
 
         #region State
 
-        private readonly List<IDisposable> _subscriptions = new();
+        private readonly List<IDisposable> _subscriptions = new(3);
         private bool _isShowing;
         private bool _disposed;
-		private float _blinkTimer;
-		private bool _cursorVisible = true;
-		private float _lastValue;
+        private float _blinkTimer;
+        private bool _cursorVisible = true;
+        private float _lastValue;
 
         #endregion
 
@@ -60,36 +67,40 @@ namespace Game.Bootstrap
             if (_barText == null || _valueText == null)
             {
                 Debug.LogError("[LoadingPanel] _barText or _valueText is not assigned!", this);
+                enabled = false;
                 return;
             }
 
+            _canvasGroup = _panel.GetComponent<CanvasGroup>();
+            if (_canvasGroup == null)
+                _canvasGroup = _panel.AddComponent<CanvasGroup>();
+
             _panel.SetActive(false);
+            _canvasGroup.alpha = 0f;
             UpdateBar(0f);
         }
 
         private void Start()
         {
-            _startedSub = GlobalMessagePipe.GetSubscriber<SceneTransitionStarted>();
-            _completedSub = GlobalMessagePipe.GetSubscriber<SceneTransitionCompleted>();
-            _progressSub = GlobalMessagePipe.GetSubscriber<SceneLoadProgress>();
+            if (!enabled) return;
 
             _subscriptions.Add(_startedSub.Subscribe(OnTransitionStarted));
             _subscriptions.Add(_completedSub.Subscribe(OnTransitionCompleted));
             _subscriptions.Add(_progressSub.Subscribe(OnProgress));
         }
 
-		private void Update()
-		{
-			if (!_isShowing || !_showCursor) return;
+        private void Update()
+        {
+            if (_disposed || !_isShowing || !_showCursor) return;
 
-			_blinkTimer += Time.unscaledDeltaTime;
-			if (_blinkTimer >= _blinkInterval)
-			{
-				_blinkTimer = 0f;
-				_cursorVisible = !_cursorVisible;
-				UpdateBar(_lastValue);
-			}
-		}
+            _blinkTimer += Time.unscaledDeltaTime;
+            if (_blinkTimer >= _blinkInterval)
+            {
+                _blinkTimer = 0f;
+                _cursorVisible = !_cursorVisible;
+                UpdateBar(_lastValue);
+            }
+        }
 
         #endregion
 
@@ -99,6 +110,7 @@ namespace Game.Bootstrap
         {
             if (_disposed || _isShowing) return;
             _isShowing = true;
+            _lastValue = 0f;
 
             if (_label != null)
                 _label.text = "Loading";
@@ -116,17 +128,10 @@ namespace Game.Bootstrap
 
         private void OnProgress(SceneLoadProgress msg)
         {
-            if (_disposed || _isShowing) return;
-				_isShowing = true;
-				_blinkTimer = 0f;
-				_cursorVisible = true;
+            if (_disposed || !_isShowing) return;
 
-			if (_label != null)
-				_label.text = "Loading";
-
-			_lastValue = 0f;
-			UpdateBar(0f);
-			ShowPanel();
+            _lastValue = msg.Progress;
+            UpdateBar(_lastValue);
         }
 
         #endregion
@@ -136,11 +141,11 @@ namespace Game.Bootstrap
         private void UpdateBar(float value)
         {
             int filled = Mathf.RoundToInt(value * _barCharCount);
-			_barText.text =
-				$"[ {new string('█', filled)}{new string('░', _barCharCount - filled)} ]";
+            _barText.text =
+                $"[ {new string('█', filled)}{new string('░', _barCharCount - filled)} ]";
 
-			string val = Mathf.RoundToInt(value * 100f).ToString("D2");
-			_valueText.text = (_showCursor && _cursorVisible) ? $"{val} █" : val;
+            string val = Mathf.RoundToInt(value * 100f).ToString("D2");
+            _valueText.text = (_showCursor && _cursorVisible) ? $"{val} █" : val;
         }
 
         #endregion
@@ -150,17 +155,12 @@ namespace Game.Bootstrap
         private void ShowPanel()
         {
             _panel.SetActive(true);
-            CanvasGroup cg = _panel.GetComponent<CanvasGroup>();
-            if (cg == null) cg = _panel.AddComponent<CanvasGroup>();
-            cg.alpha = 0f;
+            _canvasGroup.alpha = 0f;
             LeanTween.alpha(_panel, 1f, _fadeDuration);
         }
 
         private void HidePanel()
         {
-            CanvasGroup cg = _panel.GetComponent<CanvasGroup>();
-            if (cg == null) return;
-
             var lt = LeanTween.alpha(_panel, 0f, _fadeDuration);
             lt.setOnComplete(() =>
             {
@@ -177,9 +177,14 @@ namespace Game.Bootstrap
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
+        }
+
+        private void OnDestroy()
+        {
+            Dispose();
         }
 
         #endregion

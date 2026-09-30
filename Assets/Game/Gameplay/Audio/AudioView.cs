@@ -14,7 +14,6 @@ namespace Game.Gameplay.Audio
         #region Dependencies
 
         [Header("Audio Configuration")]
-        [SerializeField] private AudioMixer _audioMixer;
         [SerializeField] private int _sfxPoolSize = 8;
 
         #endregion
@@ -35,12 +34,6 @@ namespace Game.Gameplay.Audio
 
         private void Awake()
         {
-            if (_audioMixer == null)
-            {
-                Debug.LogError("[AudioView] AudioMixer is missing!", this);
-                return;
-            }
-
             _sfxPool = new AudioSource[_sfxPoolSize];
             for (int i = 0; i < _sfxPoolSize; i++)
             {
@@ -67,7 +60,7 @@ namespace Game.Gameplay.Audio
                 }
                 _lastStopTime = -10f;
             }
-        }   
+        }
 
         #endregion
 
@@ -101,7 +94,7 @@ namespace Game.Gameplay.Audio
                 if (_sfxPool[i] != null && _sfxPool[i].isPlaying)
                     _sfxPool[i].Stop();
             }
-        }   
+        }
 
         #endregion
 

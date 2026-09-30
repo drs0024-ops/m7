@@ -5,6 +5,8 @@ using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
 using UnityEngine.Video;
+using VContainer;
+using VContainer.Unity;
 
 namespace Game.Bootstrap
 {
@@ -20,6 +22,8 @@ namespace Game.Bootstrap
         [SerializeField] private VideoPlayer _videoPlayer;
         [SerializeField] private bool _allowSkip = true;
 
+        [Inject] private ISubscriber<VideoSkipRequested> _skipSub;
+
         #endregion
 
         #region State
@@ -27,6 +31,7 @@ namespace Game.Bootstrap
         private IDisposable _skipSubscription;
         private CancellationTokenSource _cts;
         private bool _disposed;
+        private bool _isPlaying;
 
         #endregion
 
@@ -37,6 +42,7 @@ namespace Game.Bootstrap
             if (_videoPlayer == null)
             {
                 Debug.LogError("[CutscenePlayer] _videoPlayer is not assigned!", this);
+                enabled = false;
                 return;
             }
 
@@ -47,7 +53,7 @@ namespace Game.Bootstrap
 
         private void OnDestroy()
         {
-            if (!_disposed) Dispose();
+            Dispose();
         }
 
         #endregion
@@ -57,10 +63,22 @@ namespace Game.Bootstrap
         /// <summary>
         /// Plays the given clip full-screen. Resolves on end or skip.
         /// If clip is null, resolves immediately (no-op).
+        /// If already playing, cancels the previous and starts the new one.
         /// </summary>
         public UniTask PlayAsync(VideoClip clip)
         {
-            if (clip == null || _disposed) return UniTask.CompletedTask;
+            if (clip == null || _disposed || !enabled) return UniTask.CompletedTask;
+
+            // Cancel any in-flight play
+            if (_isPlaying)
+            {
+                _cts?.Cancel();
+                _cts?.Dispose();
+                _cts = null;
+                _skipSubscription?.Dispose();
+                _skipSubscription = null;
+            }
+
             return PlayInternal(clip);
         }
 
@@ -70,6 +88,7 @@ namespace Game.Bootstrap
 
         private async UniTask PlayInternal(VideoClip clip)
         {
+            _isPlaying = true;
             _cts = new CancellationTokenSource();
             var tcs = new UniTaskCompletionSource();
 
@@ -85,8 +104,7 @@ namespace Game.Bootstrap
 
             if (_allowSkip)
             {
-                var skipSub = GlobalMessagePipe.GetSubscriber<VideoSkipRequested>();
-                _skipSubscription = skipSub.Subscribe(_ => tcs.TrySetResult());
+                _skipSubscription = _skipSub.Subscribe(_ => tcs.TrySetResult());
             }
 
             try
@@ -102,6 +120,7 @@ namespace Game.Bootstrap
                 _skipSubscription = null;
                 _cts.Dispose();
                 _cts = null;
+                _isPlaying = false;
             }
         }
 

@@ -43,4 +43,12 @@ namespace Game.Core.Messages
         public string Error { get; }
         public LoadFailed(string error) => Error = error;
     }
+
+    /// <summary>
+    /// Request to delete the save file. Published by UI, handled by SaveManager.
+    /// </summary>
+    public readonly struct DeleteSaveRequested
+    {
+        public static readonly DeleteSaveRequested Default = new();
+    }
 }

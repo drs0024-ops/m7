@@ -866,6 +866,18 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 0}
     - target: {fileID: 7134487374332148681, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: hudPrefab
+      value: 
+      objectReference: {fileID: 1401568394528356205, guid: 7037720f847a5413f8bd6436de3f5099, type: 3}
+    - target: {fileID: 7134487374332148681, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: bombPrefab
+      value: 
+      objectReference: {fileID: 8428756004381222317, guid: 0fb32673f44fb4d188f6a36ff65320fd, type: 3}
+    - target: {fileID: 7134487374332148681, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: _levelConfig
+      value: 
+      objectReference: {fileID: 11400000, guid: d02c1b12a8e2f46fea8391e8f64b484d, type: 2}
+    - target: {fileID: 7134487374332148681, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
       propertyPath: noYFollowCamera
       value: 
       objectReference: {fileID: 0}
@@ -993,6 +1005,9 @@ PrefabInstance:
     - {fileID: 1116968534310241013, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
     - {fileID: 5202394545992738934, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
     - {fileID: 218033192327899263, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+    - {fileID: 7386337671768935141, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+    - {fileID: 1877139732247852910, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+    - {fileID: 598094586977434910, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 965173448514407930, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
       insertIndex: -1

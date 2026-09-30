@@ -8,6 +8,11 @@ using Game.Gameplay.Save;
 
 namespace Game.UI
 {
+    /// <summary>
+    /// Video settings sub-panel: display mode, vsync, screen shake,
+    /// CRT intensity slider, colorblind, resolution, refresh rate.
+    /// Activated/deactivated by OptionsMenuController.
+    /// </summary>
     public class VideoSettingsUI : MonoBehaviour
     {
         [System.Serializable]
@@ -16,7 +21,6 @@ namespace Game.UI
             public string label;
             public TextMeshProUGUI valueText;
         }
-        
 
         private enum RowType { Cycle, Toggle, Slider }
 
@@ -24,7 +28,6 @@ namespace Game.UI
 
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
-        [Inject] private SettingsSavable _settings;
 
         [Header("Settings")]
         [SerializeField] private SettingRow[] _rows;
@@ -35,6 +38,7 @@ namespace Game.UI
 
         private IPublisher<SaveRequest> _savePublisher;
         private IPublisher<CRTIntensityChanged> _crtIntensityPublisher;
+        private IObjectResolver _container;
 
         private string[][] _options;
         private int[] _valueIndices;
@@ -42,12 +46,13 @@ namespace Game.UI
 
         private int _selectedRow;
         private bool _enabled;
+        private bool _dirty;
 
         private bool _upHeld, _downHeld, _leftHeld, _rightHeld;
         private float _blinkTimer;
         private bool _cursorVisible = true;
 
-        private float _sliderValue; // CRT Effect (0-1)
+        private float _sliderValue;
 
         #endregion
 
@@ -55,11 +60,15 @@ namespace Game.UI
 
         [Inject]
         public void Construct(
+            InputManager inputManager,
             IPublisher<SaveRequest> savePublisher,
-            IPublisher<CRTIntensityChanged> crtIntensityPublisher)
+            IPublisher<CRTIntensityChanged> crtIntensityPublisher,
+            IObjectResolver container)
         {
+            _inputManager = inputManager;
             _savePublisher = savePublisher;
             _crtIntensityPublisher = crtIntensityPublisher;
+            _container = container;
         }
 
         #endregion
@@ -71,6 +80,7 @@ namespace Game.UI
             if (_rows == null || _rows.Length == 0)
             {
                 Debug.LogError("[VideoSettings] _rows not assigned!", this);
+                enabled = false;
                 return;
             }
 
@@ -82,50 +92,45 @@ namespace Game.UI
             // ── Row 0: Display Mode (Cycle) ──
             _options[0] = new[] { "FULL", "BORDERLESS", "WINDOW" };
             _rowTypes[0] = RowType.Cycle;
-            _valueIndices[0] = 1; // default Borderless
 
             // ── Row 1: VSync (Toggle) ──
             _options[1] = new[] { "ON", "OFF" };
             _rowTypes[1] = RowType.Toggle;
-            _valueIndices[1] = 0;
 
             // ── Row 2: Screen Shake (Toggle) ──
             _options[2] = new[] { "ON", "OFF" };
             _rowTypes[2] = RowType.Toggle;
-            _valueIndices[2] = 0;
 
             // ── Row 3: CRT Effect (Slider) ──
             _options[3] = new[] { "" };
             _rowTypes[3] = RowType.Slider;
-            _sliderValue = 0.5f;
 
             // ── Row 4: Colorblind (Cycle) ──
             _options[4] = new[] { "OFF", "DEUTERANOPIA", "PROTANPIA", "TRITANOPIA" };
             _rowTypes[4] = RowType.Cycle;
-            _valueIndices[4] = 0;
 
             // ── Row 5: Resolution (Cycle - dynamic) ──
             _rowTypes[5] = RowType.Cycle;
-            _valueIndices[5] = 0;
             BuildResolutionOptions();
 
             // ── Row 6: Refresh Rate (Cycle - dynamic) ──
             _rowTypes[6] = RowType.Cycle;
-            _valueIndices[6] = 0;
+            BuildRefreshRateOptions();
 
             for (int i = 0; i < _valueIndices.Length; i++)
                 _valueIndices[i] = i < _defaultIndices.Length ? _defaultIndices[i] : 0;
 
             _sliderValue = _defaultCRTSlider;
 
-            BuildRefreshRateOptions();
-
             _selectedRow = 0;
         }
 
         private void OnEnable()
         {
+            if (!enabled) return;
+
             _enabled = true;
+            _dirty = false;
             _upHeld = _downHeld = _leftHeld = _rightHeld = false;
             _blinkTimer = 0f;
             _cursorVisible = true;
@@ -134,9 +139,9 @@ namespace Game.UI
 
         private void OnDisable()
         {
-            if (_enabled)
-                _savePublisher.Publish(new SaveRequest("VideoSettings", false));
             _enabled = false;
+            if (_dirty)
+                _savePublisher.Publish(new SaveRequest("VideoSettings", false));
         }
 
         #endregion
@@ -155,13 +160,11 @@ namespace Game.UI
             bool left = x < -0.5f;
             bool right = x > 0.5f;
 
-            // Row navigation (edge-detected)
             if (up && !_upHeld)
                 SelectRow(_selectedRow - 1);
             else if (down && !_downHeld)
                 SelectRow(_selectedRow + 1);
 
-            // Value adjustment
             if (left && !_leftHeld)
                 AdjustValue(-1);
             else if (right && !_rightHeld)
@@ -172,11 +175,9 @@ namespace Game.UI
             _leftHeld = left;
             _rightHeld = right;
 
-            // Save (Enter)
             if (_inputManager.ConfirmWasPressed)
                 Save();
 
-            // Blink cursor
             _blinkTimer += Time.unscaledDeltaTime;
             if (_blinkTimer >= _blinkInterval)
             {
@@ -199,7 +200,6 @@ namespace Game.UI
             {
                 UpdateRow(prev);
                 UpdateRow(_selectedRow);
-                Debug.Log($"[VideoSettings] Row: {_selectedRow}");
             }
         }
 
@@ -210,18 +210,21 @@ namespace Game.UI
                 case RowType.Cycle:
                     int count = _options[_selectedRow].Length;
                     _valueIndices[_selectedRow] = (_valueIndices[_selectedRow] + direction + count) % count;
+                    _dirty = true;
                     UpdateRow(_selectedRow);
                     ApplyRow(_selectedRow);
                     break;
 
                 case RowType.Toggle:
                     _valueIndices[_selectedRow] ^= 1;
+                    _dirty = true;
                     UpdateRow(_selectedRow);
                     ApplyRow(_selectedRow);
                     break;
 
                 case RowType.Slider:
                     _sliderValue = Mathf.Clamp01(_sliderValue + direction * 0.05f);
+                    _dirty = true;
                     UpdateRow(_selectedRow);
                     ApplyRow(_selectedRow);
                     break;
@@ -231,7 +234,7 @@ namespace Game.UI
         private void Save()
         {
             _savePublisher.Publish(new SaveRequest("VideoSettings", false));
-            Debug.Log("[VideoSettings] Saved.");
+            _dirty = false;
         }
 
         #endregion
@@ -241,38 +244,38 @@ namespace Game.UI
         private static readonly FullScreenMode[] _displayModes =
         {
             FullScreenMode.ExclusiveFullScreen,
-            FullScreenMode.FullScreenWindow,   // ← this IS "Borderless"
+            FullScreenMode.FullScreenWindow,
             FullScreenMode.Windowed
         };
-
 
         private void ApplyRow(int row)
         {
             switch (row)
             {
-                case 0: // Display Mode
+                case 0:
                     Screen.fullScreenMode = _displayModes[_valueIndices[row]];
                     break;
 
-                case 1: // VSync
+                case 1:
                     Application.targetFrameRate = _valueIndices[row] == 0 ? -1 : 144;
                     break;
 
-                case 3: // CRT Effect
+                case 3:
                     _crtIntensityPublisher.Publish(new CRTIntensityChanged(_sliderValue));
                     break;
 
-                case 5: // Resolution
+                case 5:
                     ApplyResolution();
                     break;
 
-                case 6: // Refresh Rate
+                case 6:
                     ApplyRefreshRate();
                     break;
             }
 
-            _settings.SetVideo(_valueIndices[0], _valueIndices[1], _valueIndices[2], _sliderValue, _valueIndices[4], _valueIndices[5], _valueIndices[6]);
-
+            _container.Resolve<SettingsSavable>().SetVideo(
+                _valueIndices[0], _valueIndices[1], _valueIndices[2],
+                _sliderValue, _valueIndices[4], _valueIndices[5], _valueIndices[6]);
         }
 
         private void ApplyResolution()
@@ -280,11 +283,11 @@ namespace Game.UI
             if (_options[5] == null || _valueIndices[5] >= _options[5].Length) return;
             var res = Screen.resolutions[_valueIndices[5]];
             Screen.SetResolution(res.width, res.height, Screen.fullScreenMode);
-        }   
+        }
 
         private void ApplyRefreshRate()
         {
-            if (_options[5] == null || _valueIndices[5] >= _options[5].Length) return;
+            if (_options[5] == null || _valueIndices[5] >= Screen.resolutions.Length) return;
             if (_options[6] == null || _valueIndices[6] >= _options[6].Length) return;
 
             var res = Screen.resolutions[_valueIndices[5]];
@@ -297,9 +300,26 @@ namespace Game.UI
             }
 
             int hz = int.Parse(_options[6][_valueIndices[6]].Replace("Hz", ""));
-            Screen.SetResolution(res.width, res.height, Screen.fullScreenMode,
-                new RefreshRate { numerator = (uint)hz, denominator = 1 });
-        }  
+
+            // Validate the rate is actually supported at this resolution
+            bool supported = false;
+            for (int i = 0; i < Screen.resolutions.Length; i++)
+            {
+                var r = Screen.resolutions[i];
+                if (r.width == res.width && r.height == res.height
+                    && (int)r.refreshRateRatio.numerator == hz)
+                {
+                    supported = true;
+                    break;
+                }
+            }
+
+            if (supported)
+                Screen.SetResolution(res.width, res.height, Screen.fullScreenMode,
+                    new RefreshRate { numerator = (uint)hz, denominator = 1 });
+            else
+                Debug.LogWarning($"[VideoSettings] {hz}Hz not supported at {res.width}x{res.height}, using default.");
+        }
 
         #endregion
 
@@ -314,7 +334,6 @@ namespace Game.UI
 
             _options[5] = names;
 
-            // Default to current resolution
             int current = 0;
             for (int i = 0; i < resolutions.Length; i++)
             {
@@ -336,9 +355,9 @@ namespace Game.UI
             int rate = (int)Screen.currentResolution.refreshRateRatio.numerator;
             if (rate == 120) current = 1;
             else if (rate == 144) current = 2;
-            else if (rate > 144) current = 3; // "Monitor" = native rate
+            else if (rate > 144) current = 3;
             _valueIndices[6] = current;
-        }   
+        }
 
         #endregion
 

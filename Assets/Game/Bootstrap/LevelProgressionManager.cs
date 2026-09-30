@@ -1,43 +1,68 @@
+using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
 using UnityEngine.SceneManagement;
-using VContainer;
 using Game.Core.Enums;
 using Game.Core.Messages;
 using VContainer.Unity;
-using System;
 using Game.Core;
 using Game.Gameplay.Level;
+using Game.Core.Interfaces;
+using UnityEngine;
 
 namespace Game.Bootstrap
 {
-    public class LevelProgressionManager : IStartable, IDisposable
+    /// <summary>
+    /// Tracks level/scene progression. Responds to LevelComplete/Restart/LoadLevel signals
+    /// and orchestrates scene transitions via ISceneTransitionDirector.
+    /// Holds cross-scene level state (coins, health) for snapshot injection.
+    /// </summary>
+    public class LevelProgressionManager : IStartable, ILevelProgression, IDisposable
     {
+        #region Dependencies
+
         private readonly ISubscriber<LevelCompleteSignal> _levelCompleteSub;
         private readonly ISubscriber<RestartLevelSignal> _restartSub;
         private readonly ISubscriber<LoadLevelSignal> _loadLevelSub;
         private readonly IPublisher<GameCompletedSignal> _gameCompletedPublisher;
         private readonly IPublisher<SceneLoadedSignal> _sceneLoadedPublisher;
         private readonly IPublisher<LevelProgressionChangedSignal> _progressionPublisher;
-
         private readonly LevelConfigSO _config;
-        private readonly SceneTransitionDirector _transitionDirector;
+        private readonly ISceneTransitionDirector _transitionDirector;
 
-        private readonly List<IDisposable> _subscriptions = new List<IDisposable>(3);
+        #endregion
+
+        #region State
+
+        private readonly List<IDisposable> _subscriptions = new(3);
 
         private int _currentLevelIndex;
         private int _currentSceneInLevelIndex;
         private bool _isInitialized;
         private bool _isLoading;
+        private bool _disposed;
+
+        #endregion
+
+        #region Level State (cross-scene, persists within a level)
+
+        private int _coinsCollected;
+        private float _currentHealth;
+
+        public int CoinsCollected => _coinsCollected;
+        public float CurrentHealth => _currentHealth;
+
+        #endregion
+
+        #region Public API
 
         public int CurrentLevelIndex => _currentLevelIndex;
         public int CurrentSceneInLevelIndex => _currentSceneInLevelIndex;
 
-        [Inject]
         public LevelProgressionManager(
             LevelConfigSO config,
-            SceneTransitionDirector transitionDirector,
+            ISceneTransitionDirector transitionDirector,
             ISubscriber<LevelCompleteSignal> levelCompleteSub,
             ISubscriber<RestartLevelSignal> restartSub,
             ISubscriber<LoadLevelSignal> loadLevelSub,
@@ -46,7 +71,7 @@ namespace Game.Bootstrap
             IPublisher<LevelProgressionChangedSignal> progressionPublisher)
         {
             if (config == null || config.allLevels == null || config.allLevels.Count == 0)
-                throw new System.InvalidOperationException("LevelConfigSO is missing or empty.");
+                throw new InvalidOperationException("LevelConfigSO is missing or empty.");
 
             _config = config;
             _transitionDirector = transitionDirector;
@@ -60,6 +85,29 @@ namespace Game.Bootstrap
             _currentLevelIndex = config.startingLevelIndex;
         }
 
+        /// <summary>
+        /// Called by scene code when coins change or health changes.
+        /// Updates the snapshot that will be injected into the next scene.
+        /// </summary>
+        public void UpdateState(int coinsCollected, float currentHealth)
+        {
+            _coinsCollected = coinsCollected;
+            _currentHealth = currentHealth;
+        }
+
+        /// <summary>
+        /// Resets level-scoped state. Called when a level is completed.
+        /// </summary>
+        public void CompleteLevel()
+        {
+            _coinsCollected = 0;
+            _currentHealth = 0f;
+        }
+
+        #endregion
+
+        #region IStartable
+
         void IStartable.Start()
         {
             if (_isInitialized) return;
@@ -71,9 +119,14 @@ namespace Game.Bootstrap
             _isInitialized = true;
         }
 
+        #endregion
+
+        #region IDisposable
+
         public void Dispose()
         {
-            if (!_isInitialized) return;
+            if (_disposed) return;
+            _disposed = true;
 
             for (int i = 0; i < _subscriptions.Count; i++)
                 _subscriptions[i].Dispose();
@@ -81,8 +134,30 @@ namespace Game.Bootstrap
             _isInitialized = false;
         }
 
+        #endregion
+
+        #region Scene Flow
+
+        public async UniTask StartLevelByName(string levelName)
+        {
+            if (_disposed) return;
+
+            for (int i = 0; i < _config.allLevels.Count; i++)
+            {
+                if (_config.allLevels[i].levelName == levelName)
+                {
+                    await StartLevel(i);
+                    return;
+                }
+            }
+
+            Debug.LogError($"[LevelProgression] Level '{levelName}' not found in config.");
+        }   
+
         public async UniTask LoadNextScene()
         {
+            if (_disposed) return;
+
             if (_currentLevelIndex >= _config.allLevels.Count)
             {
                 _gameCompletedPublisher.Publish(GameCompletedSignal.Default);
@@ -98,6 +173,7 @@ namespace Game.Bootstrap
                 {
                     _currentLevelIndex++;
                     _currentSceneInLevelIndex = 0;
+                    CompleteLevel();
                     await LoadSpecificScene(_config.allLevels[_currentLevelIndex].scenes[0]);
                 }
                 else
@@ -114,28 +190,52 @@ namespace Game.Bootstrap
 
         public async UniTask StartLevel(int levelIndex)
         {
+            if (_disposed) return;
             if (levelIndex < 0 || levelIndex >= _config.allLevels.Count) return;
 
             _currentLevelIndex = levelIndex;
             _currentSceneInLevelIndex = 0;
+            CompleteLevel();
             await LoadSpecificScene(_config.allLevels[_currentLevelIndex].scenes[0]);
         }
 
-        private void OnLevelComplete(LevelCompleteSignal msg) => _ = LoadNextScene();
+        #endregion
+
+        #region Message Handlers
+
+        private void OnLevelComplete(LevelCompleteSignal msg)
+        {
+            LoadNextScene().Forget();
+        }
 
         private void OnRestartLevel(RestartLevelSignal msg)
         {
             _currentSceneInLevelIndex = 0;
-            _ = LoadSpecificScene(_config.allLevels[_currentLevelIndex].scenes[0]);
+            CompleteLevel();
+            LoadSpecificScene(_config.allLevels[_currentLevelIndex].scenes[0]).Forget();
         }
 
-        private void OnLoadLevelRequested(LoadLevelSignal msg) => _ = StartLevel(msg.LevelIndex);   
+        private void OnLoadLevelRequested(LoadLevelSignal msg)
+        {
+            StartLevel(msg.LevelIndex).Forget();
+        }
+
+        #endregion
+
+        #region Internal
 
         private async UniTask LoadSpecificScene(SceneField sceneField)
         {
+            if (_disposed) return;
             if (_isLoading) return;
             if (sceneField == null || string.IsNullOrEmpty(sceneField.SceneName)) return;
-            if (SceneManager.GetSceneByName(sceneField.SceneName).isLoaded) return;
+
+            var existing = SceneManager.GetSceneByName(sceneField.SceneName);
+            if (existing.isLoaded)
+            {
+                _sceneLoadedPublisher.Publish(new SceneLoadedSignal(sceneField.SceneName));
+                return;
+            }
 
             _isLoading = true;
 
@@ -144,230 +244,22 @@ namespace Game.Bootstrap
                 _progressionPublisher.Publish(new LevelProgressionChangedSignal(
                     _currentLevelIndex, _currentSceneInLevelIndex, sceneField.SceneName));
 
+                var snapshot = new LevelStateSnapshot(_coinsCollected, _currentHealth);
+
+                // Pass the currently active scene so it gets unloaded after the new one loads
+                string source = SceneManager.GetActiveScene().name;
+
                 await _transitionDirector.StartTransition(
-                    sceneField, null, false, DoorToSpawnAt.None, false);
+                    sceneField, null, false, DoorToSpawnAt.None, false, snapshot, source);
 
                 _sceneLoadedPublisher.Publish(new SceneLoadedSignal(sceneField.SceneName));
             }
             finally
             {
                 _isLoading = false;
-            }
-        }
     }
-}
-
-/* Pre VContainer verson
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using System.Collections.Generic;
-
-/// <summary>
-/// Concrete implementation of ILevelProgressionManager.
-/// Manages level state, scene transitions, and persistence.
-/// </summary>
-public class LevelProgressionManager : MonoBehaviour, ILevelProgressionManager
-{
-    [Header("Level Configuration")]
-    [SerializeField] private List<LevelProgressionSaveData> allLevels = new List<LevelProgressionSaveData>();
-    
-    [Header("State Tracking")]
-    [SerializeField] private int currentLevelIndex = 0;
-    [SerializeField] private int currentSceneInLevelIndex = 0;
-
-    private string _pendingLoadSceneName;
-    private ServiceLocator _serviceLocator;
-
-    #region Public API (Read-Only)
-
-    public string TargetSceneName => _pendingLoadSceneName;
-    public int CurrentLevelIndex => currentLevelIndex;
-    public int CurrentSceneInLevelIndex => currentSceneInLevelIndex;
-
-    #endregion
-
-    private void Awake()
-    {
-        // Validate Configuration
-        if (allLevels == null || allLevels.Count == 0)
-        {
-            Debug.LogError("[LevelProgressionManager] No levels configured!");
-            enabled = false;
-            return;
-        }
-
-        // Do NOT access ServiceLocator here if you can avoid it.
-        // If you must, use the static property directly, not a cached variable.
-        Debug.Log($"[LevelProgressionManager] Awake() - Time: {Time.realtimeSinceStartup}");;
-    }
-
-    void Start()
-    {
-        // Access Static Property Directly (Triggers Lazy Load if needed)
-        _serviceLocator = ServiceLocator.Instance;
-
-        // Single Null Check
-        if (_serviceLocator == null)
-        {
-            Debug.LogError("[LevelProgressionManager] ServiceLocator instance not found!", this);
-            enabled = false;
-            return;
-        }
-
-        // Register Self
-        _serviceLocator.Register<ILevelProgressionManager>(this);
-        _serviceLocator.Register<LevelProgressionManager>(this);
-        
-        Debug.Log("[LevelProgressionManager] Successfully initialized.");
-    }
-
-    private void OnDestroy()
-    {
-        if (_serviceLocator != null)
-        {
-            _serviceLocator.Unregister<LevelProgressionManager>();
-            _serviceLocator.Unregister<ILevelProgressionManager>();
-        }
-    }
-
-    #region ILevelProgressionManager Implementation
-
-    public void LoadNextScene()
-    {
-        if (allLevels.Count == 0 || currentLevelIndex >= allLevels.Count) 
-        {
-            Debug.LogWarning("[LevelProgression] No levels available or index out of range.");
-            return;
-        }
-
-        LevelProgressionSaveData currentLevel = allLevels[currentLevelIndex];
-        
-        // Safety check for null scene list
-        if (currentLevel.scenes == null || currentLevel.scenes.Count == 0) return;
-
-        int nextSceneIndex = currentSceneInLevelIndex + 1;
-
-        if (nextSceneIndex >= currentLevel.scenes.Count)
-        {
-            // End of level: Move to next level
-            if (currentLevelIndex + 1 < allLevels.Count)
-            {
-                currentLevelIndex++;
-                currentSceneInLevelIndex = 0;
-                LoadSpecificScene(allLevels[currentLevelIndex].firstScene);
-            }
-            else
-            {
-                Debug.Log("[LevelProgression] Reached end of all levels.");
-            }
-        }
-        else
-        {
-            // Next scene in current level
-            currentSceneInLevelIndex = nextSceneIndex;
-            LoadSpecificScene(currentLevel.scenes[currentSceneInLevelIndex]);
-        }
-    }
-
-    public void StartLevel(int levelIndex)
-    {
-        if (levelIndex < 0 || levelIndex >= allLevels.Count)
-        {
-            Debug.LogError($"[LevelProgression] Level index {levelIndex} out of range.");
-            return;
-        }
-
-        currentLevelIndex = levelIndex;
-        currentSceneInLevelIndex = 0;
-        LoadSpecificScene(allLevels[currentLevelIndex].firstScene);
-    }
-
-    #endregion
-
-    #region Internal Helpers
-
-    private void LoadSpecificScene(SceneField sceneToLoad)
-    {
-        if (!sceneToLoad.IsValid()) 
-        {
-            Debug.LogError("[LevelProgression] Invalid SceneField provided.");
-            return;
-        }
-
-        _pendingLoadSceneName = sceneToLoad.SceneName;
-
-        // Attempt to resolve via ServiceLocator first, fallback to FindFirstObjectByType
-        var transitionDirector = _serviceLocator?.Get<SceneTransitionDirector>() 
-                                 ?? FindFirstObjectByType<SceneTransitionDirector>();
-
-        if (transitionDirector != null)
-        {
-            transitionDirector.StartTransition(
-                sceneToLoad,
-                onComplete: () => Debug.Log($"[LevelProgression] Loaded: {sceneToLoad.SceneName}"),
-                spawnAtDoor: false,
-                door: DoorTriggerInteraction.DoorToSpawnAt.None,
-                fromRight: false
-            );
-        }
-        else
-        {
-            Debug.LogError("[LevelProgression] SceneTransitionDirector not found!");
-        }
-    }
-
-    #endregion
-
-    #region ISaveable Implementation
-
-    public string SaveId => "LevelProgression";
-
-    public ISaveData GetSaveData()
-    {
-        // Ensure we capture the current state accurately
-        var currentLevelData = (allLevels.Count > 0 && currentLevelIndex < allLevels.Count) 
-        ? allLevels[currentLevelIndex] 
-        : default(LevelProgressionSaveData);
-
-        return new LevelProgressionSaveData
-        {
-            levelName = SceneManager.GetActiveScene().name,
-            scenes = currentLevelData.scenes != null 
-                ? new List<SceneField>(currentLevelData.scenes) 
-                : new List<SceneField>()
-        };
-    }
-
-    public void LoadFromData(ISaveData data)
-    {
-        if (data is not LevelProgressionSaveData levelData)
-        {
-            Debug.LogError("[LevelProgressionManager] Received invalid data type for loading.");
-            return;
-        }
-
-        _pendingLoadSceneName = levelData.levelName;
-
-        // CRITICAL FIX: Ensure scenes is never null after deserialization
-        if (levelData.scenes == null)
-        {
-            levelData.scenes = new List<SceneField>();
-        }
-
-        // Note: We do NOT change currentLevelIndex here automatically unless the save data 
-        // explicitly stores the index. Usually, you match the scene name to find the index.
-        // For now, we just prepare the pending load name as per original logic.
-        
-        if (levelData.scenes.Count > 0)
-        {
-            Debug.Log($"[LevelProgression] Loaded {levelData.scenes.Count} scenes. First: {levelData.firstScene}");
-        }
-        else
-        {
-            Debug.LogWarning("[LevelProgression] No scenes found in save data.");
-        }
-    }
-
-    #endregion
 }   
-*/
+
+        #endregion
+    }
+}   

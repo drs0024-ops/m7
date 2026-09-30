@@ -6,6 +6,8 @@ using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
 using UnityEngine.UI;
+using VContainer;
+using VContainer.Unity;
 
 namespace Game.UI
 {
@@ -37,8 +39,11 @@ namespace Game.UI
         [SerializeField] private Material _overlayMaterial;
         [SerializeField] private Material _rollBarMaterial;
 
-        private IPublisher<ScreenSwapped> _swappedPublisher;
-        private readonly List<IDisposable> _subscriptions = new();
+        [Inject] private IPublisher<ScreenSwapped> _swappedPublisher;
+        [Inject] private ISubscriber<CRTStateRequested> _stateRequestedSub;
+        [Inject] private ISubscriber<CRTSettingsChanged> _settingsChangedSub;
+
+        private readonly List<IDisposable> _subscriptions = new(2);
         private bool _disposed;
         private bool _configValid;
 
@@ -152,6 +157,7 @@ namespace Game.UI
             if (!_configValid)
             {
                 Debug.LogError($"[CRT] Missing required references or presets on {gameObject.name}.", this);
+                enabled = false;
                 return;
             }
 
@@ -173,20 +179,15 @@ namespace Game.UI
 
         private void Start()
         {
-            if (!_configValid) return;
+            if (!enabled) return;
 
-            _swappedPublisher = GlobalMessagePipe.GetPublisher<ScreenSwapped>();
-
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<CRTStateRequested>()
-                .Subscribe(OnStateRequested));
-
-            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<CRTSettingsChanged>()
-                .Subscribe(OnSettingsChanged));
+            _subscriptions.Add(_stateRequestedSub.Subscribe(OnStateRequested));
+            _subscriptions.Add(_settingsChangedSub.Subscribe(OnSettingsChanged));
         }
 
         private void OnDestroy()
         {
-            if (!_disposed) Dispose();
+            Dispose();
         }
 
         #endregion
@@ -579,8 +580,8 @@ namespace Game.UI
             if (_disposed) return;
             _disposed = true;
 
-            foreach (var sub in _subscriptions)
-                sub?.Dispose();
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
             _subscriptions.Clear();
         }
 

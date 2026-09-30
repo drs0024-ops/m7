@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using Game.Bootstrap;
 using Game.Core.Enums;
+using Game.Core.Messages;
 using MessagePipe;
 using NUnit.Framework;
 
@@ -19,8 +20,13 @@ namespace Game.Tests
         [SetUp]
         public void SetUp()
         {
-            _sut = new GameStateMachine();
-            InjectNoOpPublishers();
+            _sut = new GameStateMachine(
+                new NoOpPublisher<TimeScalePause>(),
+                new NoOpPublisher<TimeScaleResume>(),
+                new NoOpPublisher<GameStateChanged>(),
+                new NoOpPublisher<GameStarted>(),
+                new NoOpPublisher<GamePaused>(),
+                new NoOpPublisher<GameResumed>());
         }
 
         #region Valid Transitions

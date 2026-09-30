@@ -1,19 +1,19 @@
-// Tracks orb totals. Subscribes OrbPickedUp, publishes OrbCollectedMessage with NewTotal. ISaveable.
 using System;
 using System.Collections.Generic;
 using Game.Core.Enums;
 using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
-using VContainer;
-using VContainer.Unity;
 
 namespace Game.Gameplay.World
 {
-    public class OrbCounter : IStartable, IDisposable, ISaveable
+    /// <summary>
+    /// Tracks orb totals. Subscribes OrbPickedUp, publishes OrbCollectedMessage with NewTotal. ISaveable.
+    /// </summary>
+    public class OrbCounter : IDisposable, ISaveable
     {
-        private ISubscriber<OrbPickedUp> _pickedUpSub;
-        private IPublisher<OrbCollectedMessage> _collectedPublisher;
+        private readonly ISubscriber<OrbPickedUp> _pickedUpSub;
+        private readonly IPublisher<OrbCollectedMessage> _collectedPublisher;
         private readonly ISaveableRegistry _registry;
         private readonly List<IDisposable> _subscriptions = new();
 
@@ -28,19 +28,16 @@ namespace Game.Gameplay.World
 
         public string SaveId => "OrbCounter";
 
-        [Inject]
-        public OrbCounter(ISaveableRegistry registry)
+        public OrbCounter(
+            ISubscriber<OrbPickedUp> pickedUpSub,
+            IPublisher<OrbCollectedMessage> collectedPublisher,
+            ISaveableRegistry registry)
         {
+            _pickedUpSub = pickedUpSub;
+            _collectedPublisher = collectedPublisher;
             _registry = registry;
-        }
 
-        void IStartable.Start()
-        {
             _registry.Register(this);
-
-            _pickedUpSub = GlobalMessagePipe.GetSubscriber<OrbPickedUp>();
-            _collectedPublisher = GlobalMessagePipe.GetPublisher<OrbCollectedMessage>();
-
             _subscriptions.Add(_pickedUpSub.Subscribe(OnOrbPickedUp));
         }
 
