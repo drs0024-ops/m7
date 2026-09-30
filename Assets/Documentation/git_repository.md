@@ -16,7 +16,8 @@ At the end of each session:
 git add Assets/Game/ Assets/Scenes/ Assets/Tests/ Assets/Documentation/ ProjectSettings/
 
 # 2. Commit with a short description
-git commit -m "short present-tense description"
+git commit -m "short present-tense description" 
+
 
 # 3. Push to GitHub
 git push
