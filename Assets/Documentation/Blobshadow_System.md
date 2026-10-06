@@ -22,7 +22,7 @@ Clips at walls. Shrinks and fades when the player jumps. Squashes on landing.
 │ │ ├── Material: BlobShadowMat (shader = "Game/BlobShadow")│
 │ │ └── Sorting Order: 5 (below body) │
 │ └── BlobShadow (MonoBehaviour) │
-│ - Subscribes: InvisibilityStateChanged, │
+│ - Subscribes: buffered InvisibilityChargeChanged, │
 │ PlayerLanded, PlayerSpawned │
 │ - Raycasts: Ground (down), Walls (left/right) │
 │ - Drives: position, rotation, scale, opacity │
@@ -34,7 +34,7 @@ Clips at walls. Shrinks and fades when the player jumps. Squashes on landing.
 | Message | Direction | Purpose |
 |---------|-----------|---------|
 | `PlayerSpawned` | Subscribe | Capture player transform reference |
-| `InvisibilityStateChanged` | Subscribe | Track cloak factor for opacity lerp |
+| `InvisibilityChargeChanged` | Buffered subscribe | Convert 0-100 charge to cloak opacity |
 | `PlayerLanded` | Subscribe | Trigger squash animation |
 
 No messages are published by `BlobShadow`. It's a pure consumer.

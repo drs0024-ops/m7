@@ -7,6 +7,7 @@ using Game.Core.Interfaces;
 using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
+using VContainer;
 using VContainer.Unity;
 
 namespace Game.Gameplay.Audio
@@ -26,6 +27,8 @@ namespace Game.Gameplay.Audio
         private readonly ISubscriber<TimeScaleResume> _resumeSub;
         private readonly ISubscriber<StopMusic> _stopMusicSub;
         private readonly ISubscriber<PlayMusic> _playMusicSub;
+        [Inject] private ISubscriber<CutsceneAudioDuck> _duckSub;
+        [Inject] private ISubscriber<CutsceneAudioRestore> _restoreSub;
 
         #endregion
 
@@ -67,6 +70,14 @@ namespace Game.Gameplay.Audio
 
         #endregion
 
+        public void Initialize(
+        ISubscriber<CutsceneAudioDuck> duckSub,
+        ISubscriber<CutsceneAudioRestore> restoreSub)
+        {
+            _duckSub = duckSub;
+            _restoreSub = restoreSub;
+        }
+
         #region IStartable
 
         void IStartable.Start()
@@ -80,6 +91,12 @@ namespace Game.Gameplay.Audio
             _subscriptions.Add(_resumeSub.Subscribe(OnTimeScaleResume));
             _subscriptions.Add(_stopMusicSub.Subscribe(_ => StopMusic()));
             _subscriptions.Add(_playMusicSub.Subscribe(OnPlayMusic));
+
+            _subscriptions.Add(_duckSub.Subscribe(msg =>
+            _mixer.DuckGameAudio(msg.TargetVolume, msg.FadeDuration)));
+
+            _subscriptions.Add(_restoreSub.Subscribe(msg =>
+            _mixer.RestoreGameAudio(msg.FadeDuration)));
         }
 
         #endregion

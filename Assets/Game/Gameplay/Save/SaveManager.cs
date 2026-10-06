@@ -31,7 +31,6 @@ namespace Game.Gameplay.Save
         private readonly IPublisher<LoadCompleted> _loadCompletedPublisher;
         private readonly IPublisher<LoadFailed> _loadFailedPublisher;
         private readonly ISubscriber<SaveRequest> _saveRequestSub;
-        private readonly ISubscriber<LoadRequest> _loadRequestSub;
         private readonly ISubscriber<DeleteSaveRequested> _deleteSaveSub;
         private readonly ISaveableRegistry _registry;
         private readonly SaveConfigSO _config;
@@ -46,6 +45,7 @@ namespace Game.Gameplay.Save
         private readonly List<IDisposable> _subscriptions = new(2);
         private CancellationTokenSource _cts;
         private bool _disposed;
+        private bool _hasLoadedData;
 
         private static readonly Dictionary<Type, MethodInfo> _fromJsonCache = new();
 
@@ -53,7 +53,8 @@ namespace Game.Gameplay.Save
 
         #region Public API
 
-        public bool HasSave => CurrentLevelName != null;
+        public bool HasSave => !string.IsNullOrEmpty(CurrentLevelName) || HasValidSaveFile();
+        public string SaveFilePath => SavePath;
 
         /// <summary>
         /// The level scene name from the most recently loaded save. Null if no save loaded.
@@ -61,6 +62,28 @@ namespace Game.Gameplay.Save
         public string CurrentLevelName { get; private set; }
 
         private string SavePath => Path.Combine(Application.persistentDataPath, _config.saveFileName);
+
+        private bool HasValidSaveFile()
+        {
+            if (!File.Exists(SavePath)) return false;
+
+            try
+            {
+                var data = JsonUtility.FromJson<SaveDataContainer>(Decrypt(File.ReadAllText(SavePath)));
+                if (data == null) return false;
+
+                data.RebuildDictionary();
+                if (!data.TryGetValue("LevelProgression", out string json)) return false;
+
+                var progression = JsonUtility.FromJson<LevelProgressionSaveData>(json);
+                return !string.IsNullOrEmpty(progression.levelName);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SaveManager] Could not inspect save file: {e.Message}");
+                return false;
+            }
+        }
 
         public SaveManager(
             ISaveableRegistry registry,
@@ -70,7 +93,6 @@ namespace Game.Gameplay.Save
             IPublisher<LoadCompleted> loadCompletedPublisher,
             IPublisher<LoadFailed> loadFailedPublisher,
             ISubscriber<SaveRequest> saveRequestSub,
-            ISubscriber<LoadRequest> loadRequestSub,
             ISubscriber<DeleteSaveRequested> deleteSaveSub)
         {
             _registry = registry;
@@ -80,8 +102,8 @@ namespace Game.Gameplay.Save
             _loadCompletedPublisher = loadCompletedPublisher;
             _loadFailedPublisher = loadFailedPublisher;
             _saveRequestSub = saveRequestSub;
-            _loadRequestSub = loadRequestSub;
             _deleteSaveSub = deleteSaveSub;
+            _registry.SaveableRegistered += OnSaveableRegistered;
         }
 
         public void RequestSave()
@@ -91,16 +113,19 @@ namespace Game.Gameplay.Save
             _saveTimer = SAVE_DELAY;
         }
 
-        public async UniTask LoadAsync()
+        public async UniTask<bool> LoadAsync()
         {
-            if (_disposed) return;
+            if (_disposed) return false;
+            CurrentLevelName = null;
+            _hasLoadedData = false;
 
             try
             {
                 string decrypted = await LoadAsyncCore(_cts.Token);
-                if (_disposed) return;
+                if (_disposed) return false;
 
-                _currentSaveData = JsonUtility.FromJson<SaveDataContainer>(decrypted);
+                _currentSaveData = JsonUtility.FromJson<SaveDataContainer>(decrypted)
+                    ?? throw new InvalidDataException("Save data container was empty or invalid.");
                 _currentSaveData.RebuildDictionary();
 
                 if (_currentSaveData.version < CurrentSaveVersion)
@@ -120,14 +145,21 @@ namespace Game.Gameplay.Save
                     CurrentLevelName = null;
                 }
 
+                if (string.IsNullOrEmpty(CurrentLevelName))
+                    throw new InvalidDataException("Save file has no valid LevelProgression entry.");
+
+                _hasLoadedData = true;
+                ApplyLoadedDataToRegisteredSaveables();
                 _loadCompletedPublisher.Publish(LoadCompleted.Default);
+                return true;
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) { return false; }
             catch (Exception e)
             {
                 Debug.LogError($"[SaveManager] Load failed: {e}");
                 if (!_disposed)
                     _loadFailedPublisher.Publish(new LoadFailed(e.Message));
+                return false;
             }
         }
 
@@ -140,7 +172,6 @@ namespace Game.Gameplay.Save
             _cts = new CancellationTokenSource();
 
             _subscriptions.Add(_saveRequestSub.Subscribe(OnSaveRequested));
-            _subscriptions.Add(_loadRequestSub.Subscribe(_ => OnLoadRequested()));
             _subscriptions.Add(_deleteSaveSub.Subscribe(_ => DeleteSave()));
 
         }
@@ -181,15 +212,42 @@ namespace Game.Gameplay.Save
             }
         }
 
-        private void OnLoadRequested()
-        {
-            if (_disposed) return;
-            LoadAsync().Forget();
-        }
-
         #endregion
 
         #region Core Logic
+
+        private void ApplyLoadedDataToRegisteredSaveables()
+        {
+            var savables = _registry.GetAll();
+            for (int i = 0; i < savables.Count; i++)
+                ApplyLoadedData(savables[i]);
+        }
+
+        private void OnSaveableRegistered(ISaveable savable)
+        {
+            if (_disposed || !_hasLoadedData) return;
+            ApplyLoadedData(savable);
+        }
+
+        private void ApplyLoadedData(ISaveable savable)
+        {
+            if (savable == null) return;
+
+            try
+            {
+                ISaveData template = savable.GetSaveData();
+                if (template == null || string.IsNullOrEmpty(template.SaveId)) return;
+                if (!_currentSaveData.TryGetValue(template.SaveId, out string json)) return;
+
+                ISaveData data = DeserializeSaveData(json, template.GetType());
+                if (data != null)
+                    savable.LoadFromData(data);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[SaveManager] Failed to restore '{savable.SaveId}': {e}");
+            }
+        }
 
         private void PerformSave()
         {
@@ -308,6 +366,7 @@ namespace Game.Gameplay.Save
         {
             if (_disposed) return;
             _disposed = true;
+            _registry.SaveableRegistered -= OnSaveableRegistered;
 
             // 1. Flush pending save (synchronous, last-resort safety net)
             if (_isSavePending)

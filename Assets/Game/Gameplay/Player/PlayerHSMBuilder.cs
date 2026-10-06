@@ -16,13 +16,13 @@ namespace Game.Gameplay.Player
             ISubscriber<BouncePlatformHit> bounceHitSubscriber)
         {
             var controller = new PlayerController(context, deps, inputManager,
-                landedPublisher, jumpedPublisher, doubleJumpedPublisher,
                 bounceHitSubscriber);
 
             var rootState = new PlayerRoot(controller, inputManager,
                 landedPublisher, jumpedPublisher, doubleJumpedPublisher);
 
             var machine = new StateMachineBuilder(rootState).Build();
+            controller.SetMachine(machine);
             return (controller, machine);
         }
     }

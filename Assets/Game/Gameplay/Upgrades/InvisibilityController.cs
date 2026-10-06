@@ -1,40 +1,42 @@
 using System;
-using VContainer;
+using Game.Core.Interfaces;
 using Game.Core.Messages;
-using MessagePipe;
 using UnityEngine;
+using VContainer;
 
 namespace Game.Gameplay.Upgrades
 {
-    /// <summary>
-    /// MonoBehaviour wrapper around InvisibilityModel.
-    /// Exists so VContainer can register it in the scene scope.
-    /// All logic lives in InvisibilityModel (testable).
-    /// </summary>
-    public class InvisibilityController : MonoBehaviour, IDisposable
+    /// <summary>Thin scene component exposing the scoped invisibility model.</summary>
+    public sealed class InvisibilityController : MonoBehaviour, IDisposable
     {
-        private InvisibilityModel _model;
+        private IInvisibilityModel _model;
+        private bool _disposed;
 
-        public bool IsActive => _model?.IsActive ?? false;
+        /// <summary>Whether an invisibility station is currently charging.</summary>
+        public bool IsCharging => _model != null && _model.IsCharging;
 
+        /// <summary>Current charge in the inclusive range zero to one hundred.</summary>
+        public float ChargePercent => _model?.ChargePercent ?? 0f;
+
+        /// <summary>Current charge-derived visibility tier.</summary>
+        public InvisibilityTier CurrentTier => _model?.CurrentTier ?? InvisibilityTier.Visible;
+
+        /// <summary>Injects the scene-scoped charge model.</summary>
         [Inject]
-        private void Inject(
-            IPublisher<InvisibilityStateChanged> statePublisher,
-            ISubscriber<InvisibilityToggleRequested> toggleSub,
-            ISubscriber<UpgradeExpired> expiredSub,
-            ISubscriber<UpgradeStateChanged> stateChangedSub)
+        private void Inject(IInvisibilityModel model)
         {
-            _model = new InvisibilityModel(statePublisher, toggleSub, expiredSub, stateChangedSub);
+            _model = model ?? throw new ArgumentNullException(nameof(model));
         }
 
-        public void ActivateForDuration(float seconds) => _model?.ActivateForDuration(seconds);
-        public void Deactivate() => _model?.Deactivate();
-
-        public void Dispose() => _model?.Dispose();
-
-        private void OnDestroy()
+        /// <summary>Disposes the model and releases this façade.</summary>
+        public void Dispose()
         {
-            if (_model != null) _model.Dispose();
+            if (_disposed) return;
+            _disposed = true;
+            _model?.Dispose();
+            _model = null;
         }
+
+        private void OnDestroy() => Dispose();
     }
 }   

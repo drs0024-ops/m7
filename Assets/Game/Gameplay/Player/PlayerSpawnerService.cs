@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Game.Core.Enums;
+using Game.Core.Interfaces;
 using Game.Core.Messages;
 using Game.Gameplay.World;
 using MessagePipe;
@@ -21,8 +22,8 @@ namespace Game.Gameplay.Player
         private readonly ISubscriber<PlayerSpawnRequest> _spawnRequestSub;
         private readonly IPublisher<PlayerSpawned> _spawnedPublisher;
         private readonly IPlayerFactory _playerFactory;
-        private readonly CheckpointManager _checkpointManager;
-        private readonly CharacterSceneConfig _config;
+        private readonly ICheckpointProvider _checkpointManager;
+        private readonly ICharacterSceneConfig _config;
 
         #endregion
 
@@ -42,8 +43,8 @@ namespace Game.Gameplay.Player
             ISubscriber<PlayerSpawnRequest> spawnRequestSub,
             IPublisher<PlayerSpawned> spawnedPublisher,
             IPlayerFactory playerFactory,
-            CheckpointManager checkpointManager,
-            CharacterSceneConfig config)
+            ICheckpointProvider checkpointManager,
+            ICharacterSceneConfig config)
         {
             _spawnRequestSub = spawnRequestSub;
             _spawnedPublisher = spawnedPublisher;
@@ -135,7 +136,15 @@ namespace Game.Gameplay.Player
 
             if (_currentPlayer != null && !forceRespawn)
             {
-                _currentPlayer.transform.position = position;
+                var existingShell = _currentPlayer.GetComponentInChildren<PlayerStateDriverShell>(true);
+                if (existingShell == null)
+                {
+                    Debug.LogError("[PlayerSpawner] Existing player is missing PlayerStateDriverShell.");
+                    return;
+                }
+
+                existingShell.AlignFeetToGroundPosition(position);
+                Debug.Log($"[Phase2 Verify] PlayerSpawnerService reused player at {position}.");
                 return;
             }
 
@@ -144,12 +153,13 @@ namespace Game.Gameplay.Player
             var shell = _playerFactory.CreatePlayer(position, Quaternion.identity);
             if (shell == null)
             {
-                Debug.LogError("[PlayerSpawner] PlayerFactory returned null.");
+                Debug.LogError("[Phase2 Verify] PlayerSpawnerService failed: PlayerFactory returned null.");
                 return;
             }
 
             _currentPlayer = shell.gameObject;
             _spawnedPublisher.Publish(new PlayerSpawned(shell.transform));
+            Debug.Log($"[SpawnTrace] PlayerSpawnerService spawned '{_currentPlayer.name}' id={_currentPlayer.GetInstanceID()} scene='{_currentPlayer.scene.name}' root='{_currentPlayer.transform.root.name}' at {position}.", _currentPlayer);
         }
 
         public void Respawn()
@@ -174,12 +184,13 @@ namespace Game.Gameplay.Player
             var shell = _playerFactory.CreatePlayer(position, Quaternion.identity);
             if (shell == null)
             {
-                Debug.LogError("[PlayerSpawner] PlayerFactory returned null during initial spawn.");
+                Debug.LogError("[Phase2 Verify] PlayerSpawnerService initial spawn failed: PlayerFactory returned null.");
                 return false;
             }
 
             _currentPlayer = shell.gameObject;
             _spawnedPublisher.Publish(new PlayerSpawned(shell.transform));
+            Debug.Log($"[SpawnTrace] PlayerSpawnerService initial spawn succeeded: '{_currentPlayer.name}' id={_currentPlayer.GetInstanceID()} scene='{_currentPlayer.scene.name}' root='{_currentPlayer.transform.root.name}' at {position}.", _currentPlayer);
             return true;
         }
 
@@ -187,6 +198,7 @@ namespace Game.Gameplay.Player
         {
             if (_currentPlayer != null)
             {
+                Debug.Log($"[SpawnTrace] PlayerSpawnerService destroying '{_currentPlayer.name}' id={_currentPlayer.GetInstanceID()} scene='{_currentPlayer.scene.name}'.", _currentPlayer);
                 UnityEngine.Object.Destroy(_currentPlayer);
                 _currentPlayer = null;
             }
@@ -205,7 +217,7 @@ namespace Game.Gameplay.Player
             {
                 if (allDoors[i].gameObject.scene != currentScene) continue;
                 if (!_doorSpawnMap.ContainsKey(allDoors[i].CurrentDoorPosition))
-                    _doorSpawnMap[allDoors[i].CurrentDoorPosition] = allDoors[i].transform;
+                    _doorSpawnMap[allDoors[i].CurrentDoorPosition] = allDoors[i].transform; 
             }
         }
 

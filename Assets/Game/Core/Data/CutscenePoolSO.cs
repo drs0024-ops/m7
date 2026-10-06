@@ -11,6 +11,10 @@ namespace Game.Core.Data
     [CreateAssetMenu(fileName = "CutscenePool", menuName = "Game/Cutscene Pool")]
     public class CutscenePoolSO : ScriptableObject
     {
+        [Header("Intro Pool")]
+        [Tooltip("Played at app startup before MainMenu.")]
+        public VideoClip[] introPool;
+        
         [Header("New Game Pool")]
         [Tooltip("Randomly selected when starting a new game.")]
         public VideoClip[] newGamePool;
@@ -24,6 +28,12 @@ namespace Game.Core.Data
         {
             public string levelName;
             public VideoClip[] pool;
+        }
+
+        public VideoClip GetIntro()
+        {
+            if (introPool == null || introPool.Length == 0) return null;
+            return introPool[0]; // Always first (no random for intro)
         }
 
         public VideoClip GetNewGame()

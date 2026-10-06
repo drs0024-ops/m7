@@ -111,7 +111,6 @@ namespace Game.Gameplay.Camera
 
         private void HandleSwitch(CameraSwitchRequest req)
         {
-            if (req.Mode == default) return;
             SwitchTo(req.Mode);
         }
 

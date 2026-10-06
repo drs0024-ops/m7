@@ -28,7 +28,6 @@ namespace Game.Bootstrap
             if (_logged) return;
             _logged = true;
             _sw.Start();
-            UnityEngine.Debug.Log($"[DI] Scope '{_scopeName}' ready.");
         }
 
         public void Dispose()

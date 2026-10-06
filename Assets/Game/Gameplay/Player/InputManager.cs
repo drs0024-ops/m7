@@ -3,9 +3,6 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using Game.Core.Interfaces;
 using Game.Core.Enums;
-using MessagePipe;
-using Game.Core.Messages;
-using VContainer;
 
 namespace Game.Gameplay.Player
 {
@@ -22,13 +19,6 @@ namespace Game.Gameplay.Player
 
         #endregion
 
-        #region Dependencies
-
-        [Inject]
-        private IPublisher<InputBackPressed> _backPublisher;
-
-        #endregion
-
         #region Input Actions
 
         private PlayerInput _playerInput;
@@ -37,10 +27,12 @@ namespace Game.Gameplay.Player
         private InputAction _runAction;
         private InputAction _attackAction;
         private InputAction _interactAction;
-        private InputAction _invisibilityAction;
         private InputAction _downAction;
+        private InputAction _gameplayEscapeAction;
         private InputAction _menuAction;
         private InputAction _confirmActionMenu;
+        private InputAction _deleteYesAction;
+        private InputAction _deleteNoAction;
         private InputActionMap _playerMap;
         private InputActionMap _menuMap;
         private InputAction _moveActionPlayer;
@@ -67,15 +59,18 @@ namespace Game.Gameplay.Player
         public bool RunIsHeld { get; private set; }
         public bool AttackWasPressed { get; private set; }
         public bool InteractWasPressed { get; private set; }
-        public bool InvisibilityWasPressed { get; private set; }
         public bool DownWasPressed { get; private set; }
+        /// <summary>Whether the player currently holds the Down/crouch action.</summary>
+        public bool IsCrouching { get; private set; }
         public bool EscapeWasPressed { get; private set; }
         public bool EscapeIsHeld { get; private set; }
         public bool ConfirmWasPressed { get; private set; }
+        /// <summary>True on the frame the menu Delete Yes action is pressed.</summary>
+        public bool DeleteYesWasPressed { get; private set; }
+        /// <summary>True on the frame the menu Delete No action is pressed.</summary>
+        public bool DeleteNoWasPressed { get; private set; }
         public bool MoveWasPressedUp { get; private set; }
         public bool MoveWasPressedDown { get; private set; }
-
-        public bool IsInvisibilityPressed {get; private set;}
 
         public void ResetAll()
         {
@@ -86,15 +81,16 @@ namespace Game.Gameplay.Player
             RunIsHeld = false;
             AttackWasPressed = false;
             InteractWasPressed = false;
-            InvisibilityWasPressed = false;
             DownWasPressed = false;
+            IsCrouching = false;
             EscapeWasPressed = false;
             EscapeIsHeld = false;
             ConfirmWasPressed = false;
+            DeleteYesWasPressed = false;
+            DeleteNoWasPressed = false;
             MoveWasPressedUp = false;
             MoveWasPressedDown = false;
         }
-
         public void Dispose()
         {
             if (_disposed) return;
@@ -147,11 +143,11 @@ namespace Game.Gameplay.Player
             {
                 Debug.LogError("[InputManager] PlayerInput component missing!", this);
                 enabled = false;
-#if UNITY_EDITOR
-                throw new InvalidOperationException("InputManager requires a PlayerInput component.");
-#else
-                return;
-#endif
+                #if UNITY_EDITOR
+                    throw new InvalidOperationException("InputManager requires a PlayerInput component.");
+                #else
+                    return;
+                #endif
             }
 
             var actions = _playerInput.actions;
@@ -167,10 +163,12 @@ namespace Game.Gameplay.Player
             _runAction = _playerMap?.FindAction("Run");
             _attackAction = _playerMap?.FindAction("Attack");
             _interactAction = _playerMap?.FindAction("Interact");
-            _invisibilityAction = _playerMap?.FindAction("Invisable");
             _downAction = _playerMap?.FindAction("Down");
+            _gameplayEscapeAction = _playerMap?.FindAction("Escape");
             _menuAction = _menuMap?.FindAction("Cancel");
             _confirmActionMenu = _menuMap?.FindAction("Confirm");
+            _deleteYesAction = _menuMap?.FindAction("DeleteYes");
+            _deleteNoAction = _menuMap?.FindAction("DeleteNo");
 
             // Initialize based on which map is actually enabled
             if (_menuMap != null && _menuMap.enabled)
@@ -193,10 +191,11 @@ namespace Game.Gameplay.Player
             _runAction?.Enable();
             _attackAction?.Enable();
             _interactAction?.Enable();
-            _invisibilityAction?.Enable();
             _downAction?.Enable();
             _menuAction?.Enable();
             _confirmActionMenu?.Enable();
+            _deleteYesAction?.Enable();
+            _deleteNoAction?.Enable();
         }
 
         private void OnDisable()
@@ -208,11 +207,12 @@ namespace Game.Gameplay.Player
             _runAction?.Disable();
             _attackAction?.Disable();
             _interactAction?.Disable();
-            _invisibilityAction?.Disable();
             _downAction?.Disable();
             _menuAction?.Disable();
             _playerInput?.actions.FindActionMap("Player")?.Disable();
             _confirmActionMenu?.Disable();
+            _deleteYesAction?.Disable();
+            _deleteNoAction?.Disable();
         }
 
         private void OnDestroy()
@@ -240,18 +240,20 @@ namespace Game.Gameplay.Player
             AttackWasPressed = _attackAction?.WasPressedThisFrame() ?? false;
             InteractWasPressed = _interactAction?.WasPressedThisFrame() ?? false;
             DownWasPressed = _downAction?.WasPressedThisFrame() ?? false;
-            InvisibilityWasPressed = _invisibilityAction?.WasPressedThisFrame() ?? false;
+            IsCrouching = _downAction?.IsPressed() ?? false;
 
-            EscapeWasPressed = _menuAction?.WasPressedThisFrame() ?? false;
-            if (EscapeWasPressed)
-                _backPublisher.Publish(default);
-
-            EscapeIsHeld = _menuAction?.IsPressed() ?? false;
+            InputAction escapeAction = _playerMap != null && _playerMap.enabled
+                ? _gameplayEscapeAction
+                : _menuAction;
+            EscapeWasPressed = escapeAction?.WasPressedThisFrame() ?? false;
+            EscapeIsHeld = escapeAction?.IsPressed() ?? false;
 
             MoveWasPressedUp = _moveAction != null && moveInput.y > 0.5f && _moveAction.WasPressedThisFrame();
             MoveWasPressedDown = _moveAction != null && moveInput.y < -0.5f && _moveAction.WasPressedThisFrame();
 
             ConfirmWasPressed = _confirmActionMenu?.WasPressedThisFrame() ?? false;
+            DeleteYesWasPressed = _deleteYesAction?.WasPressedThisFrame() ?? false;
+            DeleteNoWasPressed = _deleteNoAction?.WasPressedThisFrame() ?? false;
         }
 
         #endregion

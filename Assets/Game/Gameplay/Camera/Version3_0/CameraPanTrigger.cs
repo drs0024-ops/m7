@@ -32,26 +32,41 @@ namespace Game.Gameplay.Camera
             _panPublisher = panPublisher;
         }
 
+        private void Awake()
+        {
+            GetComponent<Collider2D>().isTrigger = true;
+        }
+
         #endregion
 
         #region Internal
 
-        private void OnTriggerEnter2D(Collider2D other)
+        private void OnTriggerEnter2D(Collider2D collision)
         {
-            if (!IsPlayer(other)) return;
+            if (!collision.transform.root.CompareTag("Player")) return;
+            if (_panPublisher == null)
+            {
+                Debug.LogError("[CameraPanTrigger] CameraPanRequest publisher was not injected.", this);
+                return;
+            }
             _panPublisher.Publish(new CameraPanRequest(GetOffset(), _duration));
         }
 
-        private void OnTriggerExit2D(Collider2D other)
+        private void OnTriggerExit2D(Collider2D collision)
         {
-            if (!IsPlayer(other)) return;
+            if (!collision.transform.root.CompareTag("Player")) return;
+            if (_panPublisher == null)
+            {
+                Debug.LogError("[CameraPanTrigger] CameraPanRequest publisher was not injected.", this);
+                return;
+            }
             _panPublisher.Publish(new CameraPanRequest(Vector2.zero, _duration));
         }
 
-        private bool IsPlayer(Collider2D other)
-        {
-            return (_playerLayer.value & (1 << other.gameObject.layer)) > 0;
-        }
+        // private bool IsPlayer(Collider2D other)
+        // {
+        //     return (_playerLayer.value & (1 << other.gameObject.layer)) > 0;
+        // }
 
         private Vector2 GetOffset()
         {

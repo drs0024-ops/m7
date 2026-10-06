@@ -7,6 +7,7 @@ using Game.Core.Enums;
 using Game.Core.Messages;
 using VContainer.Unity;
 using Game.Core;
+using Game.Core.Data;
 using Game.Gameplay.Level;
 using Game.Core.Interfaces;
 using UnityEngine;
@@ -18,7 +19,7 @@ namespace Game.Bootstrap
     /// and orchestrates scene transitions via ISceneTransitionDirector.
     /// Holds cross-scene level state (coins, health) for snapshot injection.
     /// </summary>
-    public class LevelProgressionManager : IStartable, ILevelProgression, IDisposable
+    public class LevelProgressionManager : IStartable, ILevelProgression, ISaveable, IDisposable
     {
         #region Dependencies
 
@@ -30,6 +31,7 @@ namespace Game.Bootstrap
         private readonly IPublisher<LevelProgressionChangedSignal> _progressionPublisher;
         private readonly LevelConfigSO _config;
         private readonly ISceneTransitionDirector _transitionDirector;
+        private readonly ISaveableRegistry _saveableRegistry;
 
         #endregion
 
@@ -41,6 +43,7 @@ namespace Game.Bootstrap
         private int _currentSceneInLevelIndex;
         private bool _isInitialized;
         private bool _isLoading;
+        private bool _hasActiveLevel;
         private bool _disposed;
 
         #endregion
@@ -59,6 +62,7 @@ namespace Game.Bootstrap
 
         public int CurrentLevelIndex => _currentLevelIndex;
         public int CurrentSceneInLevelIndex => _currentSceneInLevelIndex;
+        public string SaveId => "LevelProgression";
 
         public LevelProgressionManager(
             LevelConfigSO config,
@@ -68,7 +72,8 @@ namespace Game.Bootstrap
             ISubscriber<LoadLevelSignal> loadLevelSub,
             IPublisher<GameCompletedSignal> gameCompletedPublisher,
             IPublisher<SceneLoadedSignal> sceneLoadedPublisher,
-            IPublisher<LevelProgressionChangedSignal> progressionPublisher)
+            IPublisher<LevelProgressionChangedSignal> progressionPublisher,
+            ISaveableRegistry saveableRegistry)
         {
             if (config == null || config.allLevels == null || config.allLevels.Count == 0)
                 throw new InvalidOperationException("LevelConfigSO is missing or empty.");
@@ -81,6 +86,7 @@ namespace Game.Bootstrap
             _gameCompletedPublisher = gameCompletedPublisher;
             _sceneLoadedPublisher = sceneLoadedPublisher;
             _progressionPublisher = progressionPublisher;
+            _saveableRegistry = saveableRegistry;
 
             _currentLevelIndex = config.startingLevelIndex;
         }
@@ -104,6 +110,36 @@ namespace Game.Bootstrap
             _currentHealth = 0f;
         }
 
+        public ISaveData GetSaveData()
+        {
+            var level = _hasActiveLevel && _currentLevelIndex >= 0 && _currentLevelIndex < _config.allLevels.Count
+                ? _config.allLevels[_currentLevelIndex]
+                : null;
+
+            return new LevelProgressionSaveData
+            {
+                levelName = level?.levelName ?? string.Empty,
+                scenes = level != null ? new List<SceneField>(level.scenes) : new List<SceneField>()
+            };
+        }
+
+        public void LoadFromData(ISaveData data)
+        {
+            if (data is not LevelProgressionSaveData progression || string.IsNullOrEmpty(progression.levelName))
+                return;
+
+            for (int i = 0; i < _config.allLevels.Count; i++)
+            {
+                if (_config.allLevels[i].levelName != progression.levelName) continue;
+                _currentLevelIndex = i;
+                _currentSceneInLevelIndex = 0;
+                _hasActiveLevel = true;
+                return;
+            }
+
+            Debug.LogWarning($"[LevelProgression] Saved level '{progression.levelName}' is not in the current LevelConfig.");
+        }
+
         #endregion
 
         #region IStartable
@@ -115,6 +151,7 @@ namespace Game.Bootstrap
             _subscriptions.Add(_levelCompleteSub.Subscribe(OnLevelComplete));
             _subscriptions.Add(_restartSub.Subscribe(OnRestartLevel));
             _subscriptions.Add(_loadLevelSub.Subscribe(OnLoadLevelRequested));
+            _saveableRegistry.Register(this);
 
             _isInitialized = true;
         }
@@ -141,6 +178,7 @@ namespace Game.Bootstrap
         public async UniTask StartLevelByName(string levelName)
         {
             if (_disposed) return;
+            if (_isLoading) return;
 
             for (int i = 0; i < _config.allLevels.Count; i++)
             {
@@ -152,11 +190,12 @@ namespace Game.Bootstrap
             }
 
             Debug.LogError($"[LevelProgression] Level '{levelName}' not found in config.");
-        }   
+        }
 
         public async UniTask LoadNextScene()
         {
             if (_disposed) return;
+            if (_isLoading) return;
 
             if (_currentLevelIndex >= _config.allLevels.Count)
             {
@@ -191,10 +230,12 @@ namespace Game.Bootstrap
         public async UniTask StartLevel(int levelIndex)
         {
             if (_disposed) return;
+            if (_isLoading) return;
             if (levelIndex < 0 || levelIndex >= _config.allLevels.Count) return;
 
             _currentLevelIndex = levelIndex;
             _currentSceneInLevelIndex = 0;
+            _hasActiveLevel = true;
             CompleteLevel();
             await LoadSpecificScene(_config.allLevels[_currentLevelIndex].scenes[0]);
         }
@@ -205,11 +246,16 @@ namespace Game.Bootstrap
 
         private void OnLevelComplete(LevelCompleteSignal msg)
         {
+            if (_disposed) return;
             LoadNextScene().Forget();
         }
 
         private void OnRestartLevel(RestartLevelSignal msg)
         {
+            if (_disposed) return;
+            if (_isLoading) return;
+            if (_currentLevelIndex < 0 || _currentLevelIndex >= _config.allLevels.Count) return;
+
             _currentSceneInLevelIndex = 0;
             CompleteLevel();
             LoadSpecificScene(_config.allLevels[_currentLevelIndex].scenes[0]).Forget();
@@ -217,6 +263,7 @@ namespace Game.Bootstrap
 
         private void OnLoadLevelRequested(LoadLevelSignal msg)
         {
+            if (_disposed) return;
             StartLevel(msg.LevelIndex).Forget();
         }
 
@@ -246,19 +293,25 @@ namespace Game.Bootstrap
 
                 var snapshot = new LevelStateSnapshot(_coinsCollected, _currentHealth);
 
-                // Pass the currently active scene so it gets unloaded after the new one loads
                 string source = SceneManager.GetActiveScene().name;
 
-                await _transitionDirector.StartTransition(
+                var result = await _transitionDirector.StartTransition(
                     sceneField, null, false, DoorToSpawnAt.None, false, snapshot, source);
 
-                _sceneLoadedPublisher.Publish(new SceneLoadedSignal(sceneField.SceneName));
+                if (result.Success)
+                {
+                    _sceneLoadedPublisher.Publish(new SceneLoadedSignal(sceneField.SceneName));
+                }
+                else if (!result.Cancelled)
+                {
+                    Debug.LogError($"[LevelProgression] Transition to '{sceneField.SceneName}' failed: {result.FailureReason}");
+                }
             }
             finally
             {
                 _isLoading = false;
-    }
-}   
+            }
+        }
 
         #endregion
     }

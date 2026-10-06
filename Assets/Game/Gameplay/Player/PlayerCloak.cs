@@ -22,12 +22,31 @@ namespace Game.Gameplay.Player
 
         void Awake()
         {
-            _sr = GetComponent<SpriteRenderer>();
+            var renderers = GetComponentsInChildren<SpriteRenderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i].sprite != null && renderers[i].sharedMaterial != null
+                    && renderers[i].sharedMaterial.HasProperty("_CloakFactor"))
+                {
+                    _sr = renderers[i];
+                    break;
+                }
+            }
+
+            if (_sr == null)
+            {
+                Debug.LogError("[PlayerCloak] No child SpriteRenderer with a sprite and _CloakFactor material was found.", this);
+                enabled = false;
+                return;
+            }
+
             _cloakID = Shader.PropertyToID("_CloakFactor");
             _propBlock = new MaterialPropertyBlock();
+            _sr.GetPropertyBlock(_propBlock);
+            _propBlock.SetFloat(_cloakID, 0f);
+            _sr.SetPropertyBlock(_propBlock);
 
             if (!startVisible) StartCloak();
-            else _sr.GetPropertyBlock(_propBlock);
         }
 
         public void StartCloak()

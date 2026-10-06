@@ -11,7 +11,7 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/PersistentManagers.unity
     guid: bb4c3e4c31956451a82cb6c20352641c
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/IntroScene.unity
     guid: 54f0d2831f02742f2b360d511a947d50
   - enabled: 1

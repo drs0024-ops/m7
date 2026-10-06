@@ -15,7 +15,7 @@ namespace Game.UI
     {
         [SerializeField] private HudManager _hudManager;
         [SerializeField] private CanvasGroup _hudCanvasGroup;
-        [SerializeField] private CRTTransitionController _crtController;
+        [Inject] private CRTTransitionController _crtController;
         [SerializeField] private float _flickerDuration = 0.1f;
         [SerializeField] private float _freezeDuration = 1.5f;
 
@@ -23,23 +23,21 @@ namespace Game.UI
         [SerializeField] private float _flinchRGBSplitAmount = 0.005f;
         [SerializeField] private float _flinchRGBSplitDuration = 0.2f;
 
-        [Inject] private HudState _hudState;
+        private HudState _hudState;
 
         public bool IsFrozen => _hudState.IsFrozen;
 
-        private ISubscriber<FlinchTriggeredMessage> _flinchSub;
+        [Inject] private ISubscriber<FlinchTriggeredMessage> _flinchSub;
         private readonly List<IDisposable> _subscriptions = new();
         private CancellationTokenSource _cts;
         private bool _disposed;
         private int _flickerTweenId = -1;
 
-        public FlinchHUDController() { }
+        public FlinchHUDController()  { }
 
         void IStartable.Start()
         {
             _cts = new CancellationTokenSource();
-
-            _flinchSub = GlobalMessagePipe.GetSubscriber<FlinchTriggeredMessage>();
             _subscriptions.Add(_flinchSub.Subscribe(_ => OnFlinch()));
         }
 

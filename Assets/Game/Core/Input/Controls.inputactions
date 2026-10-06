@@ -61,15 +61,6 @@
                     "initialStateCheck": false
                 },
                 {
-                    "name": "Invisable",
-                    "type": "Button",
-                    "id": "2dc4b949-70e7-4213-87b2-61629a2d361d",
-                    "expectedControlType": "Button",
-                    "processors": "",
-                    "interactions": "",
-                    "initialStateCheck": false
-                },
-                {
                     "name": "Down",
                     "type": "Button",
                     "id": "7882f97f-657e-40dd-bd21-660af4fbf3ff",
@@ -289,17 +280,6 @@
                 },
                 {
                     "name": "",
-                    "id": "baf479ce-aed5-4c58-ad9a-93322e4f6c59",
-                    "path": "<Keyboard>/i",
-                    "interactions": "",
-                    "processors": "",
-                    "groups": "",
-                    "action": "Invisable",
-                    "isComposite": false,
-                    "isPartOfComposite": false
-                },
-                {
-                    "name": "",
                     "id": "a0ee007e-219f-4009-8ee1-f532a406abdd",
                     "path": "<Keyboard>/downArrow",
                     "interactions": "",
@@ -347,6 +327,24 @@
                     "initialStateCheck": false
                 },
                 {
+                    "name": "DeleteYes",
+                    "type": "Button",
+                    "id": "c9210359-b5e9-4400-8d78-3cab80e26cc7",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
+                    "name": "DeleteNo",
+                    "type": "Button",
+                    "id": "d27cf3e8-4404-4344-b463-be99e840ba37",
+                    "expectedControlType": "Button",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                },
+                {
                     "name": "Cancel",
                     "type": "Button",
                     "id": "63668d9e-dab0-4576-9480-2084e8b73804",
@@ -374,6 +372,28 @@
                     "processors": "",
                     "groups": "",
                     "action": "Confirm",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "221bda74-a656-4441-a04d-236d8127370f",
+                    "path": "<Keyboard>/y",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DeleteYes",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "1e84cf33-4501-4204-a7c6-d699e54e2e85",
+                    "path": "<Keyboard>/n",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "DeleteNo",
                     "isComposite": false,
                     "isPartOfComposite": false
                 },

@@ -4,7 +4,6 @@ using Game.Core.Messages;
 using MessagePipe;
 using UnityEngine;
 using VContainer;
-using VContainer.Unity;
 
 namespace Game.Gameplay.World
 {
@@ -53,7 +52,7 @@ namespace Game.Gameplay.World
 
         private void OnTriggerEnter2D(Collider2D other)
         {
-            if (!other.CompareTag("Player")) return;
+            if (!other.transform.root.CompareTag("Player")) return;
             if (_hasBeenReached && _oneTimeTrigger) return;
 
             Activate();

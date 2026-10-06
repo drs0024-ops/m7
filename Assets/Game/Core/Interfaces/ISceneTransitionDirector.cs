@@ -6,7 +6,7 @@ namespace Game.Core.Interfaces
 {
     public interface ISceneTransitionDirector
     {
-        UniTask StartTransition(
+        UniTask<TransitionResult> StartTransition(
             SceneField scene,
             Action onComplete,
             bool spawnAtDoor,

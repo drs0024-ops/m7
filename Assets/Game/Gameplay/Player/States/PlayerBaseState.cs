@@ -34,12 +34,17 @@ namespace Game.Gameplay.Player
 
         public override void Update(float deltaTime)
         {
-            base.Update(deltaTime);
             OnUpdate(deltaTime);
 
             var target = GetTransition();
             if (target != null)
+            {
                 Machine.Sequencer.RequestTransition(Leaf(), target);
+                return;
+            }
+
+            if (ActiveChild is PlayerBaseState child)
+                child.Update(deltaTime);
         }
 
         protected virtual void OnUpdate(float deltaTime) { }
@@ -52,8 +57,10 @@ namespace Game.Gameplay.Player
 
         public override void FixedUpdate(float deltaTime)
         {
-            base.FixedUpdate(deltaTime);
             OnFixedUpdate(deltaTime);
+
+            if (ActiveChild is PlayerBaseState child)
+                child.FixedUpdate(deltaTime);
         }
 
 

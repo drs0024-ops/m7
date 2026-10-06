@@ -10,6 +10,7 @@ namespace Game.Bootstrap
     /// <summary>
     /// Thin facade over SceneTransitionOrchestrator.
     /// Accepts a SceneField and delegates to the orchestrator.
+    /// Returns TransitionResult so callers can react to failure.
     /// </summary>
     public class SceneTransitionDirector : ISceneTransitionDirector
     {
@@ -20,7 +21,7 @@ namespace Game.Bootstrap
             _orchestrator = orchestrator;
         }
 
-        public async UniTask StartTransition(
+        public async UniTask<TransitionResult> StartTransition(
             SceneField scene,
             Action onComplete,
             bool spawnAtDoor,
@@ -32,20 +33,12 @@ namespace Game.Bootstrap
             if (scene == null || !scene.IsValid())
             {
                 Debug.LogWarning("[TransitionDirector] Invalid scene field, aborting.");
-                return;
+                return TransitionResult.Failure("Invalid scene field.");
             }
 
-            try
-            {
-                await _orchestrator.TransitionAsync(
-                    scene.SceneName, onComplete, spawnAtDoor, door, fromRight,
-                    sourceSceneToUnload, snapshot);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[TransitionDirector] Transition to '{scene.SceneName}' failed: {e}");
-                // Do NOT call onComplete on failure — caller must handle via error state.
-            }
+            return await _orchestrator.TransitionAsync(
+                scene.SceneName, onComplete, spawnAtDoor, door, fromRight,
+                sourceSceneToUnload, snapshot);
         }
     }
 }   

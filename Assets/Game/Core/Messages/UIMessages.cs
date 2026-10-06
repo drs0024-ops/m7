@@ -61,7 +61,11 @@ namespace Game.Core.Messages
     /// <summary>
     /// Request to open the Options panel. Published by MainMenu and PauseMenu.
     /// </summary>
-    public readonly struct OptionsOpenRequested { }
+    public readonly struct OptionsOpenRequested
+    {
+        public bool FromPause { get; }
+        public OptionsOpenRequested(bool fromPause = false) => FromPause = fromPause;
+    }
 
     /// <summary>
     /// Request to close the Options panel. Published by Escape (at category level).
@@ -75,7 +79,12 @@ namespace Game.Core.Messages
     public readonly struct OptionsPanelStateChanged
     {
         public bool IsOpen { get; }
-        public OptionsPanelStateChanged(bool isOpen) => IsOpen = isOpen;
+        public bool FromPause { get; }
+        public OptionsPanelStateChanged(bool isOpen, bool fromPause = false)
+        {
+            IsOpen = isOpen;
+            FromPause = fromPause;
+        }
     }
     
 /* Depricated

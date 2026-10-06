@@ -18,6 +18,7 @@ Shader "Game/CloakingShader"
             "RenderType" = "Transparent"
             "Queue" = "Transparent"
             "IgnoreProjector" = "True"
+            "RenderPipeline" = "UniversalPipeline"
         }
 
         // ─── PASS 1: GLOW (Additive) ───
@@ -107,7 +108,7 @@ Shader "Game/CloakingShader"
         Pass
         {
             Name "Body"
-            Tags { "LightMode" = "SRPDefaultUnlit" }
+            Tags { "LightMode" = "Universal2D" }
             Cull Off
             Lighting Off
             ZWrite Off

@@ -1,10 +1,7 @@
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using Game.Core.Enums;
 using Game.Gameplay.Camera;
-using System;
-using MessagePipe;
-using Game.Core.Messages;
 
 namespace Game.Tests
 {
@@ -12,61 +9,66 @@ namespace Game.Tests
     public class CameraTargetManagerTests
     {
         private GameObject _go;
-        private CameraConfig _config;
         private CameraTargetManager _manager;
-        private IServiceProvider _provider;
 
         [SetUp]
         public void SetUp()
         {
-            _go = new GameObject("TestCameraConfig");
-            _config = _go.AddComponent<CameraConfig>();
-            _config.rigs.Clear();
-            _config.rigs.Add(new CameraRigEntry
-            {
-                mode = CameraMode.CenterFollow,
-                camera = null,
-                composer = null,
-                confiner = null,
-                isFollowCam = true
-            });
+            _go = new GameObject("TestCameraTarget");
+            _manager = _go.AddComponent<CameraTargetManager>();
 
-            var builder = new BuiltinContainerBuilder();
-            builder.AddMessagePipe();
-            builder.AddMessageBroker<CameraTargetUpdate>();
-            builder.AddMessageBroker<CameraBoundsResetRequest>();
-            _provider = builder.BuildServiceProvider();
-
-            var targetSub = _provider.GetRequiredService<ISubscriber<CameraTargetUpdate>>();
-            var boundsSub = _provider.GetRequiredService<ISubscriber<CameraBoundsResetRequest>>();
-
-            _manager = new CameraTargetManager(_config, targetSub, boundsSub);
+            var initializedField = typeof(CameraTargetManager).GetField(
+                "_initialized",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(initializedField, Is.Not.Null);
+            initializedField.SetValue(_manager, true);
         }
 
         [TearDown]
-        public void Teardown()
+        public void TearDown()
         {
-            _manager?.Dispose();
-            _provider = null;
             if (_go != null) UnityEngine.Object.DestroyImmediate(_go);
         }
 
         [Test]
-        public void UpdateTargets_NullFollow_DoesNotThrow()
+        public void SetTarget_ValidTransform_UpdatesActiveTarget()
         {
-            _manager.UpdateTargets(null, null, null);
+            var target = new GameObject("FakeTarget");
+            _manager.SetTarget(target.transform);
+
+            Assert.That(_manager.ActiveTarget, Is.EqualTo(target.transform));
+            UnityEngine.Object.DestroyImmediate(target);
         }
 
         [Test]
-        public void UpdateTargets_WithLockedRoomTarget_DoesNotThrow()
+        public void SetTarget_Null_IsNoOp()
         {
-            _manager.UpdateTargets(null, null, null);
+            var target = new GameObject("FakeTarget");
+            _manager.SetTarget(target.transform);
+            _manager.SetTarget(null);
+
+            Assert.That(_manager.ActiveTarget, Is.EqualTo(target.transform));
+            UnityEngine.Object.DestroyImmediate(target);
         }
 
         [Test]
-        public void ResetBounds_DoesNotThrow()
+        public void SetTarget_SecondCall_ReplacesFirst()
         {
-            Assert.DoesNotThrow(() => _manager.ResetBounds());
+            var target1 = new GameObject("Target1");
+            var target2 = new GameObject("Target2");
+
+            _manager.SetTarget(target1.transform);
+            _manager.SetTarget(target2.transform);
+
+            Assert.That(_manager.ActiveTarget, Is.EqualTo(target2.transform));
+            UnityEngine.Object.DestroyImmediate(target1);
+            UnityEngine.Object.DestroyImmediate(target2);
+        }
+
+        [Test]
+        public void ActiveTarget_Default_IsNull()
+        {
+            Assert.That(_manager.ActiveTarget, Is.Null);
         }
 
         [Test]
@@ -74,6 +76,15 @@ namespace Game.Tests
         {
             _manager.Dispose();
             Assert.DoesNotThrow(() => _manager.Dispose());
+        }
+
+        [Test]
+        public void SetTarget_AfterDispose_DoesNotThrow()
+        {
+            _manager.Dispose();
+            var target = new GameObject("FakeTarget");
+            Assert.DoesNotThrow(() => _manager.SetTarget(target.transform));
+            UnityEngine.Object.DestroyImmediate(target);
         }
     }
 }   

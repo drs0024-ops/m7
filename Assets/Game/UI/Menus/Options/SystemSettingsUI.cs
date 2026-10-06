@@ -177,32 +177,35 @@ namespace Game.UI
             bool left = x < -0.5f;
             bool right = x > 0.5f;
 
-            if (up && !_upHeld)
-                SelectRow(_selectedRow - 1);
-            else if (down && !_downHeld)
-                SelectRow(_selectedRow + 1);
+            if (!_deleteConfirming)
+            {
+                if (up && !_upHeld)
+                    SelectRow(_selectedRow - 1);
+                else if (down && !_downHeld)
+                    SelectRow(_selectedRow + 1);
+            }
 
             if (_deleteConfirming)
             {
-                if (left && !_leftHeld)
-                    _valueIndices[_selectedRow] = 0;
-                else if (right && !_rightHeld)
-                    _valueIndices[_selectedRow] = 1;
-
-                if (_inputManager.ConfirmWasPressed)
-                {
-                    if (_valueIndices[_selectedRow] == 1)
-                        ConfirmDelete();
-                    _deleteConfirming = false;
-                    _valueIndices[_selectedRow] = 0;
-                    UpdateRow(_selectedRow);
-                }
+                if (_inputManager.DeleteYesWasPressed || (right && !_rightHeld))
+                    SetDeleteChoice(1);
+                else if (_inputManager.DeleteNoWasPressed || (left && !_leftHeld))
+                    SetDeleteChoice(0);
 
                 if (_inputManager.EscapeWasPressed)
                 {
                     _deleteConfirming = false;
                     _valueIndices[_selectedRow] = 0;
                     UpdateRow(_selectedRow);
+                }
+                else if (_inputManager.ConfirmWasPressed)
+                {
+                    bool shouldDelete = _valueIndices[_selectedRow] == 1;
+                    _deleteConfirming = false;
+                    _valueIndices[_selectedRow] = 0;
+                    UpdateRow(_selectedRow);
+                    if (shouldDelete)
+                        ConfirmDelete();
                 }
             }
             else
@@ -265,7 +268,14 @@ namespace Game.UI
         {
             _deleteConfirming = true;
             _valueIndices[_selectedRow] = 0;
-            _rows[_selectedRow].valueText.text = "Delete? N █";
+            UpdateRow(_selectedRow);
+        }
+
+        private void SetDeleteChoice(int choice)
+        {
+            if (_valueIndices[_selectedRow] == choice) return;
+            _valueIndices[_selectedRow] = choice;
+            UpdateRow(_selectedRow);
         }
 
         private void ConfirmDelete()
@@ -323,7 +333,7 @@ namespace Game.UI
 
             if (row == 8 && _deleteConfirming)
             {
-                val = _valueIndices[row] == 1 ? "Delete? Y" : "Delete? N";
+                val = _valueIndices[row] == 1 ? "Delete? Y (Enter)" : "Delete? N (Y/N or Left/Right)";
             }
             else
             {

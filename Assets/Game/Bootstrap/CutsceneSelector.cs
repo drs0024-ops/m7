@@ -1,23 +1,24 @@
 using Game.Core.Data;
+using Game.Core.Interfaces;
 using UnityEngine.Video;
 
-namespace Game.Bootstrap
+namespace Game.Core
 {
-    /// <summary>
-    /// Maps game context to a VideoClip from the CutscenePoolSO.
-    /// Plain C#, VContainer-registered.
-    /// </summary>
-    public class CutsceneSelector
+    public class CutsceneSelector : ICutsceneSelector
     {
         private readonly CutscenePoolSO _pool;
+        
 
         public CutsceneSelector(CutscenePoolSO pool)
         {
             _pool = pool;
         }
 
+        public VideoClip GetForIntro() => _pool.GetIntro();
         public VideoClip GetForNewGame() => _pool.GetNewGame();
-
         public VideoClip GetForLoad(string levelName) => _pool.GetForLevel(levelName);
+        public VideoClip GetForLevelComplete(string levelName) => _pool.GetForLevel(levelName);
+        public VideoClip GetForGameOver() => null;
+        public VideoClip GetForEnding() => null;
     }
 }   

@@ -18,6 +18,7 @@ namespace Game.UI
         [Header("Boot text for _titleText")]
         [SerializeField] private string _freshBootTitle = "SYSTEM BOOT: CONCIENCENESS TRANSFER SUCCESSFUL";
         [SerializeField] private string _returnBootTitle = "SYSTEM BOOT: NORMAL";
+        [SerializeField] private string _saveDetectedTitle = "SYSTEM BOOT: SAVE DETECTED";
 
         [Header("Title Reference")]
         [SerializeField] private TextMeshProUGUI _titleText;
@@ -74,7 +75,7 @@ namespace Game.UI
 
         #region Public API
 
-        public void StartSequence(bool fromGameplay = false)
+        public void StartSequence(bool fromGameplay = false, bool hasSave = false)
         {
             if (_disposed) return;
 
@@ -89,7 +90,7 @@ namespace Game.UI
             _cts?.Cancel();
             _cts = new CancellationTokenSource();
 
-            _selectedIndex = 0;
+            _selectedIndex = hasSave && _lineTexts.Length > 1 ? 1 : 0;
             _isSelecting = false;
 
             // Re-read full text in case inspector changed
@@ -106,7 +107,9 @@ namespace Game.UI
                     _itemEnabled[i] = true;
             }
 
-            string title = fromGameplay ? _returnBootTitle : _freshBootTitle;
+            string title = fromGameplay
+                ? _returnBootTitle
+                : hasSave ? _saveDetectedTitle : _freshBootTitle;
 
             if (fromGameplay)
             {
@@ -132,14 +135,23 @@ namespace Game.UI
 
         public void SetItemEnabled(int index, bool enabled)
         {
-            if (index < 0 || index >= _itemEnabled.Length) return;
+            if (_itemEnabled == null || index < 0 || index >= _itemEnabled.Length) return;
             _itemEnabled[index] = enabled;
             _lineTexts[index].color = enabled ? _enabledColor : _disabledColor;
-        }
 
-        public void SetReturnTitle(string title)
-        {
-            _returnBootTitle = title;
+            if (!enabled && _selectedIndex == index)
+            {
+                for (int offset = 1; offset < _itemEnabled.Length; offset++)
+                {
+                    int next = (_selectedIndex + offset) % _itemEnabled.Length;
+                    if (!_itemEnabled[next]) continue;
+                    _selectedIndex = next;
+                    break;
+                }
+            }
+
+            if (_isSelecting)
+                RebuildSelection();
         }
 
         public void MoveSelection(int direction)
@@ -161,6 +173,17 @@ namespace Game.UI
                 _audio.PlaySFX(SoundType.MenuNavigate);
                 RebuildSelection();
             }
+        }
+
+        public void SelectAction(int index)
+        {
+            if (!_isSelecting || _disposed || _itemEnabled == null
+                || index < 0 || index >= _itemEnabled.Length || !_itemEnabled[index])
+                return;
+
+            _selectedIndex = index;
+            _cursorVisible = true;
+            RebuildSelection();
         }
 
         public int GetSelectedAction() => _selectedIndex;

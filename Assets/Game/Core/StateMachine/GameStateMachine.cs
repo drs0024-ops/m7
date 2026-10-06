@@ -37,11 +37,11 @@ namespace Game.Bootstrap
         private static readonly Dictionary<GameState, HashSet<GameState>> _validTransitions = new()
         {
             [GameState.MainMenu]   = new() { GameState.Loading, GameState.IntroVideo, GameState.QuitGame },
+            [GameState.IntroVideo] = new() { GameState.MainMenu },
             [GameState.Loading]    = new() { GameState.Gameplay, GameState.MainMenu },
             [GameState.Gameplay]   = new() { GameState.Paused, GameState.GameOver, GameState.Loading },
             [GameState.Paused]     = new() { GameState.Gameplay, GameState.MainMenu },
             [GameState.GameOver]   = new() { GameState.MainMenu },
-            [GameState.IntroVideo] = new() { GameState.MainMenu, GameState.Loading },
             [GameState.QuitGame]   = new() { },
         };
 

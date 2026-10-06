@@ -32,6 +32,7 @@ Material:
     - _CloakFactor: 0
     - _DilateAmount: 0.0299
     - _GlowIntensity: 0.25
+    - _GlowSoftness: 0.5
     m_Colors:
     - _GlowColor: {r: 0.29999998, g: 0.9, b: 1, a: 1}
   m_BuildTextureStacks: []

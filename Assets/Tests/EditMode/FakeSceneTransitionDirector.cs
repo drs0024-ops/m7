@@ -9,31 +9,23 @@ namespace Game.Tests
     public class FakeSceneTransitionDirector : ISceneTransitionDirector
     {
         public string LastLoadedScene;
+        public string LastSourceSceneToUnload;
+        public TransitionResult NextResult = TransitionResult.Ok;
 
-        public async UniTask StartTransition(
+        public async UniTask<TransitionResult> StartTransition(
             SceneField scene,
             Action onComplete,
             bool spawnAtDoor,
             DoorToSpawnAt door,
             bool fromRight,
-            LevelStateSnapshot? snapshot = null)
+            LevelStateSnapshot? snapshot = null,
+            string sourceSceneToUnload = null)
         {
             LastLoadedScene = scene.SceneName;
+            LastSourceSceneToUnload = sourceSceneToUnload;
             onComplete?.Invoke();
             await UniTask.CompletedTask;
+            return NextResult;
         }
-
-        public UniTask StartTransition(
-        SceneField scene,
-        Action onComplete,
-        bool spawnAtDoor,
-        DoorToSpawnAt door,
-        bool fromRight,
-        LevelStateSnapshot? snapshot = null,
-        string sourceSceneToUnload = null)
-        {
-            // your existing fake logic here
-            return UniTask.CompletedTask;
-        }   
     }
 }   

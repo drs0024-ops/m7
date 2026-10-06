@@ -61,6 +61,17 @@ namespace Game.Gameplay.Player
         public bool IsDead => false;
         public float CurrentHealth => 1f;
 
+        public void AlignFeetToGroundPosition(Vector3 groundPosition)
+        {
+            if (_feetColl == null)
+                throw new InvalidOperationException("PlayerStateDriverShell requires a feet collider to align its spawn position.");
+
+            Physics2D.SyncTransforms();
+            float verticalOffset = groundPosition.y - _feetColl.bounds.min.y;
+            transform.root.position += Vector3.up * verticalOffset;
+            Physics2D.SyncTransforms();
+        }
+
         #endregion
 
         #region Construction
@@ -162,7 +173,7 @@ namespace Game.Gameplay.Player
             if (_logStateChanges && path != _lastStatePath)
             {
                 _lastStatePath = path;
-                Debug.Log($"[HSM] {path}", this);
+                Debug.Log($"[SpawnTrace] HSM '{path}' shell='{name}' id={GetInstanceID()} scene='{gameObject.scene.name}' root='{transform.root.name}'.", this);
             }
 
             bool grounded = _controller.Ctx.IsGrounded;

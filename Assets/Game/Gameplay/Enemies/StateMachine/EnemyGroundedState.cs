@@ -7,6 +7,7 @@ namespace Game.Gameplay.Enemies
         public readonly EnemyStillState Still;
         public readonly EnemyIdleState Idle;
         public readonly EnemyChaseState Chase;
+        public readonly EnemyInvestigateState Investigate;
 
         public EnemyGroundedState(State parent, Enemy enemy)
             : base(parent, enemy)
@@ -14,6 +15,7 @@ namespace Game.Gameplay.Enemies
             Still = new EnemyStillState(this, enemy);
             Idle = new EnemyIdleState(this, enemy);
             Chase = new EnemyChaseState(this, enemy);
+            Investigate = new EnemyInvestigateState(this, enemy);
         }
 
         protected override State GetInitialState() => Still;
@@ -22,6 +24,7 @@ namespace Game.Gameplay.Enemies
         {
             if (!enemy.IsGrounded) return ((EnemyRoot)Parent).Airborne;
             if (enemy.IsWithinStrikingDistance) return ((EnemyRoot)Parent).Attack;
+            if (enemy.IsInvestigating) return Investigate;
             return null;
         }
     }

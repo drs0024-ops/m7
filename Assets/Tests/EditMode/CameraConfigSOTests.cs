@@ -29,8 +29,23 @@ namespace Game.Tests
                 confiner = null,
                 isFollowCam = true
             });
-            // ... other rigs
-        }
+            _config.rigs.Add(new CameraRigEntry
+            {
+                mode = CameraMode.NoYFollow,
+                camera = null,
+                composer = null,
+                confiner = null,
+                isFollowCam = true
+            });
+            _config.rigs.Add(new CameraRigEntry
+            {
+                mode = CameraMode.LockedRoom,
+                camera = null,
+                composer = null,
+                confiner = null,
+                isFollowCam = false
+            });
+        }   
 
         [TearDown]
         public void TearDown()

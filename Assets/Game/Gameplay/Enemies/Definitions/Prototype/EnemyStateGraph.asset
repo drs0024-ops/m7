@@ -1,0 +1,46 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: EnemyStateGraph
+  m_EditorClassIdentifier: Gameplay:Game.Gameplay.Enemies.Runtime:EnemyStateGraphDefinition
+  _initialStateId: idle
+  _states:
+  - _id: idle
+    _parentId: 
+    _initialChildId: 
+  - _id: chase
+    _parentId: 
+    _initialChildId: 
+  - _id: attack
+    _parentId: 
+    _initialChildId: 
+  _transitions:
+  - _sourceStateId: idle
+    _targetStateId: chase
+    _condition: 0
+    _threshold: 0
+  - _sourceStateId: chase
+    _targetStateId: idle
+    _condition: 1
+    _threshold: 0
+  - _sourceStateId: chase
+    _targetStateId: attack
+    _condition: 2
+    _threshold: 0
+  - _sourceStateId: attack
+    _targetStateId: idle
+    _condition: 1
+    _threshold: 0
+  - _sourceStateId: attack
+    _targetStateId: chase
+    _condition: 3
+    _threshold: 0

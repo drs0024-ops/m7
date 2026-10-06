@@ -14,7 +14,7 @@ namespace Game.Gameplay.Upgrades
     /// Tracks unlocked upgrades and active timed effects.
     /// Integrates with the save system via ISaveable.
     /// </summary>
-    public class UpgradeStateManager : ITickable, IStartable, ISaveable, IDisposable
+    public class UpgradeStateManager : ITickable, IStartable, ISaveable, IDisposable, IUpgradeState
     {
         #region Dependencies
 
@@ -41,6 +41,8 @@ namespace Game.Gameplay.Upgrades
         public Transform CurrentPlayer => _currentPlayer;
 
         public bool HasUpgrade(string id) => _unlockedUpgradeIds.Contains(id);
+        public bool IsUnlocked(string id) => _unlockedUpgradeIds.Contains(id);
+        public int GetCount(string id) => _unlockedUpgradeIds.Contains(id) ? 1 : 0;
         public bool IsEffectActive(string id) => _activeTimedEffects.ContainsKey(id);
 
         public float GetRemainingTime(string id)

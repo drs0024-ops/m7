@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 694a23208400c48bb990755eed415287, type: 3}
   m_Name: GameFlowConfig
   m_EditorClassIdentifier: Core::Game.Core.GameFlowConfig
-  initialState: 1
+  initialState: 2

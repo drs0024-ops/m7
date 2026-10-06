@@ -30,18 +30,30 @@ Material:
     m_Ints: []
     m_Floats:
     - _Collapse: 0
+    - _ConsciencePulse: 0
     - _Damage: 0
-    - _FailureAmount: 0.802
+    - _FailureAmount: 0
     - _InnerRadius: 0.2
     - _MinBrightness: 0.15
+    - _RGBSplit: 0
     - _RetraceIntensity: 0.099
+    - _RetraceOpacity: 1
     - _RetraceWidth: 0.005
-    - _RetraceY: 0.58886427
+    - _RetraceY: -1
+    - _RetraceY2: 0.7
     - _Softness: 0.15
+    - _TearDirection: 1
     - _TearHeight: 0.03
+    - _TearLeadingOpacity: 1
+    - _TearOpacity: 1
     - _TearSpeed: 0.137
+    - _TearTrailingOpacity: 1
+    - _TearY: 0
+    - _TransitionOpacity: 1
     m_Colors:
     - _PhosphorColor: {r: 0.21520111, g: 0.49056602, b: 0.31906682, a: 1}
+    - _ScreenSize: {r: 1920, g: 1080, b: 0, a: 0}
+    - _TearColor: {r: 0, g: 0.8, b: 0.29999998, a: 1}
     - _VignetteColor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

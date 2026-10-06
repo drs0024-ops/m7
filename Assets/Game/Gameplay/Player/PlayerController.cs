@@ -11,7 +11,7 @@ namespace Game.Gameplay.Player
     public class PlayerController : IDisposable
     {
         public readonly PlayerContext Ctx;
-        public readonly StateMachine Machine;
+        public StateMachine Machine { get; private set; }
 
         private readonly PlayerDependencies _deps;
         private readonly InputManager _input;
@@ -24,9 +24,6 @@ namespace Game.Gameplay.Player
             PlayerContext ctx,
             PlayerDependencies deps,
             InputManager input,
-            IPublisher<PlayerLanded> landedPublisher,
-            IPublisher<PlayerJumped> jumpedPublisher,
-            IPublisher<PlayerDoubleJumped> doubleJumpedPublisher,
             ISubscriber<BouncePlatformHit> bounceHitSubscriber)
         {
             Ctx = ctx;
@@ -35,9 +32,13 @@ namespace Game.Gameplay.Player
             _cts = new CancellationTokenSource();
 
             _subscriptions.Add(bounceHitSubscriber.Subscribe(OnBouncePlatformHit));
+        }
 
-            var root = new PlayerRoot(this, input, landedPublisher, jumpedPublisher, doubleJumpedPublisher);
-            Machine = new StateMachineBuilder(root).Build();
+        public void SetMachine(StateMachine machine)
+        {
+            if (Machine != null)
+                throw new InvalidOperationException("PlayerController state machine is already assigned.");
+            Machine = machine ?? throw new ArgumentNullException(nameof(machine));
         }
 
         public string CurrentStatePath

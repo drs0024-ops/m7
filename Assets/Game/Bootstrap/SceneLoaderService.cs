@@ -20,7 +20,7 @@ namespace Game.Bootstrap
     {
         #region Dependencies
 
-        private const int SCENE_LOAD_BUDGET_MS = 300;
+        private const int SCENE_LOAD_BUDGET_MS = 600;
 
         private readonly SceneRegistry _sceneRegistry;
         private readonly LifetimeScope _currentScope;

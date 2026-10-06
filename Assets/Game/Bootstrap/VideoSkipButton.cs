@@ -22,6 +22,7 @@ namespace Game.Bootstrap
 
         private InputManager _inputManager;
         private SaveManager _saveManager;
+        private GameStateMachine _stateMachine;
         private ISubscriber<GameStateChanged> _stateSub;
         private ISubscriber<VideoFinished> _finishedSub;
         private IPublisher<VideoSkipRequested> _skipPublisher;
@@ -55,12 +56,14 @@ namespace Game.Bootstrap
         private void Construct(
             InputManager inputManager,
             SaveManager saveManager,
+            GameStateMachine stateMachine,
             ISubscriber<GameStateChanged> stateSub,
             ISubscriber<VideoFinished> finishedSub,
             IPublisher<VideoSkipRequested> skipPublisher)
         {
             _inputManager = inputManager;
             _saveManager = saveManager;
+            _stateMachine = stateMachine;
             _stateSub = stateSub;
             _finishedSub = finishedSub;
             _skipPublisher = skipPublisher;
@@ -85,6 +88,7 @@ namespace Game.Bootstrap
         {
             _subscriptions.Add(_stateSub.Subscribe(OnStateChanged));
             _subscriptions.Add(_finishedSub.Subscribe(_ => Hide()));
+            UpdateVisibility(_stateMachine.CurrentState);
         }
 
         private void Update()
@@ -111,8 +115,12 @@ namespace Game.Bootstrap
         {
             if (_disposed) return;
 
-            bool shouldShow = msg.State == GameState.IntroVideo
-                              && _saveManager.HasSave;
+            UpdateVisibility(msg.State);
+        }
+
+        private void UpdateVisibility(GameState state)
+        {
+            bool shouldShow = state == GameState.IntroVideo && _saveManager.HasSave;
 
             if (shouldShow) Show();
             else Hide();

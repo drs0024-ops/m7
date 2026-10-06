@@ -13,7 +13,7 @@ namespace Game.Gameplay.Player
     /// Tilts to match ground angle. Clips at walls. Shrinks/fades on jump.
     /// Squashes on landing. Stays visible when player is invisible.
     /// </summary>
-    public class BlobShadow : MonoBehaviour, IStartable, IDisposable
+    public class BlobShadow : MonoBehaviour, IDisposable
     {
         #region Constants
 
@@ -59,7 +59,7 @@ namespace Game.Gameplay.Player
 
         private SpriteRenderer _shadowRenderer;
         private Material _shadowMaterial;
-        private ISubscriber<InvisibilityStateChanged> _invisibilitySub;
+        private IBufferedSubscriber<InvisibilityChargeChanged> _invisibilitySub;
         private ISubscriber<PlayerLanded> _landedSub;
         private ISubscriber<PlayerSpawned> _spawnedSub;
         private readonly List<IDisposable> _subscriptions = new(3);
@@ -68,6 +68,7 @@ namespace Game.Gameplay.Player
         private float _currentCloakFactor;
         private float _squashTimer;
         private Vector3 _lastShadowScale = Vector3.one;
+        private bool _isInitialized;
 
         private bool _disposed;
 
@@ -77,7 +78,7 @@ namespace Game.Gameplay.Player
 
         [Inject]
         private void Inject(
-            ISubscriber<InvisibilityStateChanged> invisibilitySub,
+            IBufferedSubscriber<InvisibilityChargeChanged> invisibilitySub,
             ISubscriber<PlayerLanded> landedSub,
             ISubscriber<PlayerSpawned> spawnedSub)
         {
@@ -88,26 +89,35 @@ namespace Game.Gameplay.Player
 
         #endregion
 
-        #region IStartable
-
-        void IStartable.Start()
+        public void Initialize()
         {
+            if (_isInitialized || _disposed) return;
+            _isInitialized = true;
+
             _shadowRenderer = GetComponent<SpriteRenderer>();
             if (_shadowRenderer == null)
             {
                 Debug.LogError("[BlobShadow] No SpriteRenderer found on BlobShadow GO.");
+                enabled = false;
+                return;
+            }
+
+            if (_invisibilitySub == null || _landedSub == null || _spawnedSub == null)
+            {
+                Debug.LogError("[BlobShadow] Dependencies were not injected before Initialize().", this);
+                enabled = false;
                 return;
             }
 
             _shadowMaterial = new Material(_shadowRenderer.sharedMaterial);
             _shadowRenderer.material = _shadowMaterial;
 
-            _subscriptions.Add(_invisibilitySub.Subscribe(OnInvisibilityChanged));
+            _subscriptions.Add(_invisibilitySub.Subscribe(OnInvisibilityChargeChanged));
             _subscriptions.Add(_landedSub.Subscribe(OnLanded));
             _subscriptions.Add(_spawnedSub.Subscribe(OnPlayerSpawned));
         }
 
-        #endregion
+        private void Start() => Initialize();
 
         #region Message Handlers
 
@@ -117,9 +127,9 @@ namespace Game.Gameplay.Player
                 _playerTransform = message.Player;
         }
 
-        private void OnInvisibilityChanged(InvisibilityStateChanged state)
+        private void OnInvisibilityChargeChanged(InvisibilityChargeChanged state)
         {
-            _currentCloakFactor = state.TargetFactor;
+            _currentCloakFactor = Mathf.Clamp01(state.ChargePercent / 100f);
         }
 
         private void OnLanded(PlayerLanded _)

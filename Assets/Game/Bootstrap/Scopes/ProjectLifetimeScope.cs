@@ -8,6 +8,7 @@ using Game.Gameplay.Player;
 using Game.Gameplay.Save;
 using Game.Gameplay.Achievements;
 using Game.Gameplay.Upgrades;
+using Game.Gameplay.Enemies.Runtime;
 using Game.Core;
 using UnityEngine.InputSystem.UI;
 using Game.UI;
@@ -16,6 +17,7 @@ using Game.Core.Data;
 using Game.Core.Interfaces;
 using Unity.Cinemachine;
 using Game.Gameplay.Level;
+using Game.Core.Messages;
 
 namespace Game.Bootstrap.Scopes
 {
@@ -26,7 +28,7 @@ namespace Game.Bootstrap.Scopes
 
         [Header("Prefabs")]
         [SerializeField] private PlayerMovementStats _defaultStats;
-        [SerializeField] private BombUpgradeHandler bombPrefab;
+        [SerializeField] private BombUpgradeHandler bombHandlerPrefab;
         [SerializeField] private HudManager hudPrefab;
 
         [Header("Managers MonoBehaviour")]
@@ -46,6 +48,15 @@ namespace Game.Bootstrap.Scopes
         [SerializeField] private GameFlowConfig gameFlowConfig;
         [SerializeField] private CutscenePoolSO _cutscenePool;
         [SerializeField] private LevelConfigSO _levelConfig;
+
+        [Header("Invisibility Charge Tuning")]
+        [SerializeField, Min(0f)] private float _invisibilityChargeRate = 10f;
+        [SerializeField, Min(0f)] private float _invisibilityDecayRate = 5f;
+        [SerializeField, Min(0f)] private float _invisibilityCrouchMultiplier = 0.6f;
+        [SerializeField, Min(0f)] private float _invisibilityInterruptionDrainPercent = 10f;
+        [SerializeField, Range(0f, 100f)] private float _invisibilityTranslucentThreshold = 30f;
+        [SerializeField, Range(0f, 100f)] private float _invisibilityCloakedSlowedThreshold = 60f;
+        [SerializeField, Range(0f, 100f)] private float _invisibilityCloakedThreshold = 80f;
 
         [Header("UI")]
         [SerializeField] private CRTTransitionController cRTTransitionController;
@@ -70,16 +81,26 @@ namespace Game.Bootstrap.Scopes
         {
             ValidateSceneReferences();
 
-            ConfigureMessaging(builder);
+            new InvisibilityInstaller().Install(builder);
             ConfigureInstances(builder);
             ConfigureSingletons(builder);
             ConfigureMonoPrefabs(builder);
+            ConfigureBuildCallbacks(builder);
             ConfigureSceneComponents(builder);
             ConfigureTransient(builder);
             ConfigureCamera(builder);
             ConfigureAnalytics(builder);
             ConfigureEntryPoints(builder);
             ConfigureEventSystem(builder);
+
+            #region EditorOnly/Test
+
+                #if UNITY_EDITOR
+                builder.RegisterEntryPoint<InjectionValidator>().AsSelf();
+            #endif
+
+                #endregion
+
         }
 
         /// <summary>
@@ -105,7 +126,7 @@ namespace Game.Bootstrap.Scopes
             CheckRef(errors, "loadingPanelController", loadingPanelController);
             CheckRef(errors, "_physicalCamera", _physicalCamera);
             CheckRef(errors, "_brain", _brain);
-            CheckRef(errors, "bombPrefab", bombPrefab);
+            CheckRef(errors, "bombPrefab", bombHandlerPrefab);
             CheckRef(errors, "hudPrefab", hudPrefab);
             CheckRef(errors, "audioMixerPrefab", audioMixerPrefab);
 
@@ -121,20 +142,6 @@ namespace Game.Bootstrap.Scopes
                 errors.AppendLine($"  • {fieldName}");
         }
 
-        private void ConfigureMessaging(IContainerBuilder builder)
-        {
-            // FIX #5: Only capture stack traces in editor/dev builds
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            builder.RegisterMessagePipe(o => o.EnableCaptureStackTrace = true);
-#else
-            builder.RegisterMessagePipe();
-#endif
-            builder.RegisterBuildCallback(resolver =>
-            {
-                GlobalMessagePipe.SetProvider(resolver.AsServiceProvider());
-            });
-        }
-
         private void ConfigureInstances(IContainerBuilder builder)
         {
             builder.RegisterInstance(saveConfig);
@@ -145,11 +152,22 @@ namespace Game.Bootstrap.Scopes
             builder.RegisterInstance(gameFlowConfig);
             builder.RegisterInstance(_cutscenePool);
             builder.RegisterInstance(_levelConfig);
+            builder.RegisterInstance(new InvisibilityTuning(
+                _invisibilityChargeRate,
+                _invisibilityDecayRate,
+                _invisibilityCrouchMultiplier,
+                _invisibilityInterruptionDrainPercent,
+                _invisibilityTranslucentThreshold,
+                _invisibilityCloakedSlowedThreshold,
+                _invisibilityCloakedThreshold));
             builder.RegisterInstance(new SceneRegistry());
         }
 
         private void ConfigureSingletons(IContainerBuilder builder)
         {
+            builder.Register<UnityFrameTimeProvider>(Lifetime.Singleton)
+                .As<IFrameTimeProvider>();
+
             builder.Register<SaveableRegistry>(Lifetime.Singleton)
                 .As<ISaveableRegistry>()
                 .AsSelf();
@@ -159,12 +177,16 @@ namespace Game.Bootstrap.Scopes
             builder.Register<CutsceneSelector>(Lifetime.Singleton)
                 .AsSelf();
 
+            builder.Register<IntroSequenceController>(Lifetime.Singleton)
+                .As<IIntroSequenceController>()
+                .AsSelf();
+
             builder.Register<SceneCleanupService>(Lifetime.Singleton);
         }
 
         private void ConfigureMonoPrefabs(IContainerBuilder builder)
         {
-            builder.RegisterComponentInNewPrefab(bombPrefab, Lifetime.Singleton)
+            builder.RegisterComponentInNewPrefab(bombHandlerPrefab, Lifetime.Singleton)
                 .AsImplementedInterfaces()
                 .AsSelf();
 
@@ -179,7 +201,56 @@ namespace Game.Bootstrap.Scopes
             builder.RegisterComponentInNewPrefab(hudPrefab, Lifetime.Singleton)
                 .AsImplementedInterfaces()
                 .AsSelf();
-        }
+
+            // Explicitly inject BombUpgradeHandler (GameObject) after container build
+            builder.RegisterBuildCallback(resolver =>
+            {
+                var handler = resolver.Resolve<BombUpgradeHandler>();
+                if (handler != null)
+                    resolver.Inject(handler.gameObject);
+            });
+        }   
+
+        private void ConfigureBuildCallbacks(IContainerBuilder builder)
+        {
+            builder.RegisterBuildCallback(resolver =>
+            {
+                var handler = resolver.Resolve<BombUpgradeHandler>();
+                Debug.Log($"[BuildCallback] BombUpgradeHandler resolved: {handler != null}, instanceID={handler?.gameObject.GetInstanceID()}");
+                if (handler != null)
+                {
+                    handler.Initialize(
+                        resolver.Resolve<ISubscriber<UpgradeStateChanged>>(),
+                        resolver.Resolve<IPublisher<BombPlaced>>(),
+                        resolver.Resolve<IUpgradeState>());
+                }
+
+                var input = resolver.Resolve<InputManager>();
+                if (input != null)
+                    resolver.InjectGameObject(input.gameObject);  // 1. Try normal inject first
+
+                var audio = resolver.Resolve<AudioMixerMaster>();
+                if (audio != null)
+                    resolver.InjectGameObject(audio.gameObject);
+
+                var audioMgr = resolver.Resolve<AudioManager>();
+                if (audioMgr != null)
+                    audioMgr.Initialize(
+                        resolver.Resolve<ISubscriber<CutsceneAudioDuck>>(),
+                        resolver.Resolve<ISubscriber<CutsceneAudioRestore>>());   
+
+                var hud = resolver.Resolve<HudManager>();
+                if (hud != null)
+                {
+                    resolver.InjectGameObject(hud.gameObject);
+
+                    var components = hud.GetComponentsInChildren<MonoBehaviour>(true);
+                    for (int i = 0; i < components.Length; i++)
+                        if (components[i] is IStartable startable)
+                            startable.Start();
+                }
+            });
+        }   
 
         private void ConfigureSceneComponents(IContainerBuilder builder)
         {
@@ -191,7 +262,7 @@ namespace Game.Bootstrap.Scopes
             builder.RegisterComponent(sceneFadeManagerPrefab);
             builder.RegisterComponent(audioView);
             builder.RegisterComponent(cRTTransitionController);
-            builder.RegisterComponent(dialogueController);
+            builder.RegisterComponent(dialogueController); 
             builder.RegisterComponent(audioSettingsUI);
             builder.RegisterComponent(optionsMenuController);
             builder.RegisterComponent(systemSettingsUI);
@@ -200,14 +271,16 @@ namespace Game.Bootstrap.Scopes
 
             builder.RegisterComponentInHierarchy<CutscenePlayer>()
                 .AsSelf();
+            builder.RegisterComponentInHierarchy<VideoSkipButton>()
+                .AsSelf();
         }
 
         private void ConfigureTransient(IContainerBuilder builder)
         {
-            builder.Register<SceneTransitionDirector>(Lifetime.Transient)
+            builder.Register<SceneTransitionDirector>(Lifetime.Singleton)
                 .As<ISceneTransitionDirector>()
                 .AsSelf();
-        }
+        }   
 
         private void ConfigureCamera(IContainerBuilder builder)
         {
@@ -221,7 +294,7 @@ namespace Game.Bootstrap.Scopes
             builder.Register<ConsoleAnalyticsReporter>(Lifetime.Singleton)
                 .As<IAnalyticsReporter>()
                 .AsSelf();
-            builder.Register<MessagePipeTracer>(Lifetime.Singleton)
+            builder.RegisterEntryPoint<MessagePipeTracer>()
                 .AsSelf();
 #else
             builder.Register<NoOpAnalyticsReporter>(Lifetime.Singleton)
@@ -254,8 +327,11 @@ namespace Game.Bootstrap.Scopes
 
             // Currency & Upgrades
             builder.RegisterEntryPoint<CurrencyManager>().AsSelf();
-            builder.RegisterEntryPoint<UpgradeStateManager>().AsSelf();
+            builder.RegisterEntryPoint<UpgradeStateManager>().As<IUpgradeState>().AsSelf();
             builder.RegisterEntryPoint<UpgradeOrchestrator>().AsSelf();
+
+            // Enemy decision logic is stateless; instance contexts live in scene scopes.
+            builder.Register<EnemyDecisionRuntime>(Lifetime.Singleton).AsSelf();
 
             // Achievements & Objectives
             builder.RegisterEntryPoint<ObjectiveTracker>().AsSelf();
@@ -264,12 +340,12 @@ namespace Game.Bootstrap.Scopes
             // Observability
             builder.RegisterEntryPoint<ScopeLifecycleLogger>().AsSelf();
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            builder.RegisterEntryPoint<AnalyticsReporter>().AsSelf();
-#endif
-#if UNITY_EDITOR
-            builder.RegisterEntryPoint<GameFlowDebugCollector>().AsSelf();
-#endif
+            #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                builder.RegisterEntryPoint<AnalyticsReporter>().AsSelf();
+            #endif
+            #if UNITY_EDITOR
+                builder.RegisterEntryPoint<GameFlowDebugCollector>().AsSelf();
+            #endif
         }
 
         private void ConfigureEventSystem(IContainerBuilder builder)
@@ -299,6 +375,8 @@ namespace Game.Bootstrap.Scopes
             builder.RegisterInstance(eventSystem);
         }
 
+
+
         #endregion
 
         #region Unity Lifecycle
@@ -310,5 +388,7 @@ namespace Game.Bootstrap.Scopes
         }
 
         #endregion
+
+        
     }
 }   

@@ -1,105 +1,124 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using Cysharp.Threading.Tasks;
-using UnityEngine;
 using Game.Core.Messages;
 using MessagePipe;
+using UnityEngine;
 using VContainer;
 
 namespace Game.Gameplay.Player
 {
-    public class InvisibilityVisualPresenter : MonoBehaviour, IDisposable
+    /// <summary>Applies continuous invisibility charge to the player's cloak shader.</summary>
+    public sealed class InvisibilityVisualPresenter : MonoBehaviour, IDisposable
     {
-        [SerializeField] private float _transitionDuration = 0.5f;
-
-        private ISubscriber<InvisibilityStateChanged> _stateSub;
-        private ISubscriber<PlayerSpawned> _playerSpawnedSub;
-
-        private Renderer _targetRenderer;
-        private MaterialPropertyBlock _propertyBlock;
-        private CancellationTokenSource _transitionCts;
-        private bool _isDisposed;
-
-        private readonly List<IDisposable> _subscriptions = new(2);
         private static readonly int CloakFactorId = Shader.PropertyToID("_CloakFactor");
 
+        private IBufferedSubscriber<InvisibilityChargeChanged> _chargeSubscriber;
+        private ISubscriber<InvisibilityTierChanged> _tierSubscriber;
+        private ISubscriber<PlayerSpawned> _playerSpawnedSubscriber;
+        private readonly List<IDisposable> _subscriptions = new(3);
+
+        private SpriteRenderer _targetRenderer;
+        private MaterialPropertyBlock _propertyBlock;
+        private float _latestFactor;
+        private float _lastAppliedFactor = -1f;
+        private bool _isInitialized;
+        private bool _isDisposed;
+
+        /// <summary>Injects buffered charge state and player/tier messages.</summary>
         [Inject]
         private void Inject(
-            ISubscriber<InvisibilityStateChanged> stateSub,
-            ISubscriber<PlayerSpawned> playerSpawnedSub)
+            IBufferedSubscriber<InvisibilityChargeChanged> chargeSubscriber,
+            ISubscriber<InvisibilityTierChanged> tierSubscriber,
+            ISubscriber<PlayerSpawned> playerSpawnedSubscriber)
         {
-            _stateSub = stateSub;
-            _playerSpawnedSub = playerSpawnedSub;
+            _chargeSubscriber = chargeSubscriber;
+            _tierSubscriber = tierSubscriber;
+            _playerSpawnedSubscriber = playerSpawnedSubscriber;
         }
 
-        private void Start()
+        /// <summary>Starts subscriptions before the player-spawn entry point runs.</summary>
+        public void Initialize()
         {
+            if (_isInitialized || _isDisposed) return;
+#if UNITY_EDITOR
+            Debug.Assert(_chargeSubscriber != null && _tierSubscriber != null
+                && _playerSpawnedSubscriber != null,
+                "InvisibilityVisualPresenter dependencies must be injected before Initialize().", this);
+#endif
+            if (_chargeSubscriber == null || _tierSubscriber == null || _playerSpawnedSubscriber == null)
+                return;
+
             _propertyBlock = new MaterialPropertyBlock();
-            _subscriptions.Add(_playerSpawnedSub.Subscribe(OnPlayerSpawned));
-            _subscriptions.Add(_stateSub.Subscribe(OnStateChanged));
+            _subscriptions.Add(_chargeSubscriber.Subscribe(OnChargeChanged));
+            _subscriptions.Add(_tierSubscriber.Subscribe(OnTierChanged));
+            _subscriptions.Add(_playerSpawnedSubscriber.Subscribe(OnPlayerSpawned));
+            _isInitialized = true;
         }
+
+        private void Start() => Initialize();
 
         private void OnPlayerSpawned(PlayerSpawned message)
         {
             if (message.Player == null) return;
-            _targetRenderer = message.Player.GetComponentInChildren<Renderer>();
+
+            var renderers = message.Player.GetComponentsInChildren<SpriteRenderer>(true);
+            _targetRenderer = null;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                SpriteRenderer candidate = renderers[i];
+                if (candidate.sprite == null || candidate.sharedMaterial == null) continue;
+#if UNITY_EDITOR
+                Debug.Assert(candidate.sharedMaterial.HasProperty(CloakFactorId),
+                    $"SpriteRenderer '{candidate.name}' is missing _CloakFactor.", candidate);
+#endif
+                if (!candidate.sharedMaterial.HasProperty(CloakFactorId)) continue;
+                _targetRenderer = candidate;
+                break;
+            }
+
             if (_targetRenderer == null)
-                Debug.LogWarning("[InvisibilityVisualPresenter] Player has no Renderer.");
+            {
+                Debug.LogWarning("[InvisibilityVisualPresenter] No player SpriteRenderer has a _CloakFactor material.", this);
+                return;
+            }
+
+            _lastAppliedFactor = -1f;
+            ApplyFactor(_latestFactor);
         }
 
-        private void OnStateChanged(InvisibilityStateChanged state)
+        private void OnChargeChanged(InvisibilityChargeChanged message)
         {
-            if (_targetRenderer == null) return;
-
-            _transitionCts?.Cancel();
-            _transitionCts?.Dispose();
-
-            _transitionCts = new CancellationTokenSource();
-            _ = AnimateCloak(state.TargetFactor, _transitionCts.Token);
+            _latestFactor = Mathf.Clamp01(message.ChargePercent / 100f);
+            ApplyFactor(_latestFactor);
         }
 
-        private async UniTask AnimateCloak(float targetFactor, CancellationToken token)
+        private void ApplyFactor(float factor)
         {
+            if (_targetRenderer == null || _propertyBlock == null
+                || Mathf.Approximately(_lastAppliedFactor, factor))
+                return;
+
             _targetRenderer.GetPropertyBlock(_propertyBlock);
-            float startFactor = _propertyBlock.GetFloat(CloakFactorId);
-            float elapsed = 0f;
-
-            while (elapsed < _transitionDuration && !token.IsCancellationRequested)
-            {
-                elapsed += Time.deltaTime;
-                float t = Mathf.Clamp01(elapsed / _transitionDuration);
-                float currentFactor = Mathf.Lerp(startFactor, targetFactor, t);
-
-                _propertyBlock.SetFloat(CloakFactorId, currentFactor);
-                _targetRenderer.SetPropertyBlock(_propertyBlock);
-
-                await UniTask.Yield(PlayerLoopTiming.Update, cancellationToken: token);
-            }
-
-            if (!token.IsCancellationRequested)
-            {
-                _propertyBlock.SetFloat(CloakFactorId, targetFactor);
-                _targetRenderer.SetPropertyBlock(_propertyBlock);
-            }
+            _propertyBlock.SetFloat(CloakFactorId, factor);
+            _targetRenderer.SetPropertyBlock(_propertyBlock);
+            _lastAppliedFactor = factor;
         }
 
+        private void OnTierChanged(InvisibilityTierChanged message)
+        {
+            Debug.Log($"[InvisibilityVisualPresenter] Visibility tier: {message.NewTier}.", this);
+        }
+
+        /// <summary>Disposes all MessagePipe subscriptions.</summary>
         public void Dispose()
         {
             if (_isDisposed) return;
             _isDisposed = true;
-
-            _transitionCts?.Cancel();
-            _transitionCts?.Dispose();
-
             for (int i = 0; i < _subscriptions.Count; i++)
-                _subscriptions[i].Dispose();
+                _subscriptions[i]?.Dispose();
             _subscriptions.Clear();
         }
 
-        private void OnDestroy()
-        {
-            Dispose();
-        }
+        private void OnDestroy() => Dispose();
     }
-}   
+}

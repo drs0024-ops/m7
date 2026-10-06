@@ -12,7 +12,8 @@ namespace Game.Bootstrap
             for (int i = 1; i < existing.Length; i++)
                 Destroy(existing[i].gameObject);
 
-            DontDestroyOnLoad(gameObject);
+            // DDL the root, not the EventSystem component's GO
+            DontDestroyOnLoad(transform.root.gameObject);
         }
     }
 }   

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Game.Core;
+using Game.Core.Enums;
 using Game.Core.Messages;
 using MessagePipe;
 using TMPro;
@@ -28,15 +29,21 @@ namespace Game.UI
         [Header("Cursor")]
         [SerializeField] private float _blinkInterval = 0.5f;
 
+        [Header("Background")]
+        [SerializeField] private GameObject _background;
+
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
         [Inject] private SceneRegistry _sceneRegistry;
         [Inject] private IPublisher<ResumeGameRequested> _resumePublisher;
         [Inject] private IPublisher<NavigateToMenu> _navigateToMenuPublisher;
         [Inject] private IPublisher<OptionsOpenRequested> _optionsOpenPublisher;
+        [Inject] private IPublisher<CRTStateRequested> _crtStatePublisher;
         [Inject] private ISubscriber<GamePaused> _pausedSub;
         [Inject] private ISubscriber<GameResumed> _resumedSub;
         [Inject] private ISubscriber<GameStarted> _startedSub;
+        [Inject] private ISubscriber<GameStateChanged> _stateChangedSub;
+        [Inject] private ISubscriber<OptionsPanelStateChanged> _optionsStateSub;
 
         #endregion
 
@@ -45,6 +52,8 @@ namespace Game.UI
         private string[] _lineFullText;
         private int _selectedIndex;
         private bool _panelOpen;
+        private bool _backgroundOpen;
+        private bool _suppressEscapeUntilRelease;
         private bool _upHeld;
         private bool _downHeld;
         private float _blinkTimer;
@@ -73,6 +82,7 @@ namespace Game.UI
             }
 
             _panelOpen = false;
+            ToggleBackground(false);
             SetVisualActive(false);
         }
 
@@ -83,6 +93,8 @@ namespace Game.UI
             _subscriptions.Add(_pausedSub.Subscribe(_ => OpenPauseMenu()));
             _subscriptions.Add(_resumedSub.Subscribe(_ => ClosePauseMenu()));
             _subscriptions.Add(_startedSub.Subscribe(_ => ClosePauseMenu()));
+            _subscriptions.Add(_stateChangedSub.Subscribe(OnGameStateChanged));
+            _subscriptions.Add(_optionsStateSub.Subscribe(OnOptionsPanelStateChanged));
         }
 
         private void OnDestroy()
@@ -112,7 +124,17 @@ namespace Game.UI
 
             if (_inputManager.EscapeWasPressed)
             {
+                if (_suppressEscapeUntilRelease)
+                    return;
+
                 _resumePublisher.Publish(default);
+                return;
+            }
+
+            if (_suppressEscapeUntilRelease)
+            {
+                if (!_inputManager.EscapeIsHeld)
+                    _suppressEscapeUntilRelease = false;
                 return;
             }
 
@@ -160,7 +182,9 @@ namespace Game.UI
                     _resumePublisher.Publish(default);
                     break;
                 case 1:
-                    _optionsOpenPublisher.Publish(default);
+                    ClosePauseMenu(keepBackground: true);
+                    _crtStatePublisher.Publish(new CRTStateRequested(CRTState.MenuIdle));
+                    _optionsOpenPublisher.Publish(new OptionsOpenRequested(fromPause: true));
                     break;
                 case 2:
                     _navigateToMenuPublisher.Publish(new NavigateToMenu(_sceneRegistry.GameLoopScene));
@@ -172,19 +196,44 @@ namespace Game.UI
 
         #region Show / Hide
 
+        private void ToggleBackground(bool active)
+        {
+            _backgroundOpen = active;
+            if (_background != null)
+                _background.SetActive(active);
+        }
+
         private void OpenPauseMenu()
         {
             if (_disposed || _panelOpen) return;
             _panelOpen = true;
+            ToggleBackground(true);
             ResetState();
             SetVisualActive(true);
         }
 
-        private void ClosePauseMenu()
+        private void ClosePauseMenu(bool keepBackground = false)
         {
             if (_disposed || !_panelOpen) return;
             _panelOpen = false;
             SetVisualActive(false);
+            if (!keepBackground)
+                ToggleBackground(false);
+        }
+
+        private void OnGameStateChanged(GameStateChanged msg)
+        {
+            if (msg.State == Game.Core.Enums.GameState.MainMenu)
+                ClosePauseMenu();
+        }
+
+        private void OnOptionsPanelStateChanged(OptionsPanelStateChanged msg)
+        {
+            if (!msg.IsOpen && msg.FromPause)
+            {
+                _suppressEscapeUntilRelease = true;
+                OpenPauseMenu();
+            }
         }
 
         private void SetVisualActive(bool active)

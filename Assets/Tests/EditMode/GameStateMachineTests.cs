@@ -88,11 +88,11 @@ namespace Game.Tests
         }
 
         [Test]
-        public void TransitionTo_IntroVideoToLoading_Succeeds()
+        public void TransitionTo_IntroVideoToMainMenu_Succeeds()
         {
             _sut.ForceState(GameState.IntroVideo);
-            Assert.That(_sut.TransitionTo(GameState.Loading), Is.True);
-            Assert.That(_sut.CurrentState, Is.EqualTo(GameState.Loading));
+            Assert.That(_sut.TransitionTo(GameState.MainMenu), Is.True);
+            Assert.That(_sut.CurrentState, Is.EqualTo(GameState.MainMenu));
         }
 
         [Test]

@@ -31,6 +31,7 @@ namespace Game.Gameplay.Camera
         private Transform _playerTransform;
         private bool _isFollowing;
         private bool _isFacingRight = true;
+        private bool _isInitialized;
         private bool _isDisposed;
 
         #endregion
@@ -64,6 +65,14 @@ namespace Game.Gameplay.Camera
 
         private void Start()
         {
+            Initialize();
+        }
+
+        public void Initialize()
+        {
+            if (_isInitialized || _isDisposed) return;
+            _isInitialized = true;
+
             _disposables.Add(_spawnSub.Subscribe(OnPlayerSpawned));
             _disposables.Add(_facingSub.Subscribe(OnPlayerFacingChanged));
             _readyPublisher.Publish(CameraSystemReady.Default);

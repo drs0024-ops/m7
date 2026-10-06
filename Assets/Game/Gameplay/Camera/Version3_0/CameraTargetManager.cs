@@ -1,126 +1,151 @@
 using System;
-using System.Collections.Generic;
-using Unity.Cinemachine;
 using UnityEngine;
-using MessagePipe;
-using Game.Core.Enums;
+using Unity.Cinemachine;
 using Game.Core.Messages;
+using MessagePipe;
+using VContainer;
 
 namespace Game.Gameplay.Camera
 {
     /// <summary>
-    /// Applies follow targets and boundary confiners to virtual cameras.
-    /// Follow cameras receive follow + boundary. Non-follow cameras receive boundary only.
-    /// The LockedRoom camera also receives its scene-specific room target.
+    /// Manages virtual camera target switching:
+    /// Spawn point (default) → Player (on spawn) → Checkpoint (on death/respawn).
+    /// Prevents NaN transforms when no player exists yet.
+    /// Compatible with Cinemachine 3.1.5 (uses CinemachineVirtualCameraBase).
     /// </summary>
-    public class CameraTargetManager : IDisposable
+    public class CameraTargetManager : MonoBehaviour, IDisposable
     {
+        #region Serialized
+
+        [SerializeField] private Transform _defaultTarget;
+
+        #endregion
+
         #region Dependencies
 
-        private readonly CameraConfig _config;
-        private readonly ISubscriber<CameraTargetUpdate> _targetSub;
-        private readonly ISubscriber<CameraBoundsResetRequest> _boundsSub;
+        [Inject] private CameraConfig _config;
+        [Inject] private ISubscriber<CameraTargetUpdate> _targetSub;
+        [Inject] private ISubscriber<CameraBoundsResetRequest> _boundsSub;
+        [Inject] private ISubscriber<PlayerSpawned> _spawnedSub;
+        [Inject] private ISubscriber<PlayerDied> _diedSub;
 
         #endregion
 
         #region State
 
-        private readonly List<IDisposable> _disposables = new List<IDisposable>(2);
-        private bool _isDisposed;
+        private CinemachineVirtualCameraBase _activeVcam;
+        private Transform _currentTarget;
+        private bool _initialized;
 
-        #endregion
-
-        #region Constructor
-
-        public CameraTargetManager(
-            CameraConfig config,
-            ISubscriber<CameraTargetUpdate> targetSub,
-            ISubscriber<CameraBoundsResetRequest> boundsSub)
-        {
-            _config = config;
-            _targetSub = targetSub;
-            _boundsSub = boundsSub;
-        }
+        private IDisposable _targetSubscription;
+        private IDisposable _boundsSubscription;
+        private IDisposable _spawnedSubscription;
+        private IDisposable _diedSubscription;
 
         #endregion
 
         #region Public API
 
+        public Transform ActiveTarget => _currentTarget;
+
         public void Initialize()
         {
-            _disposables.Add(_targetSub.Subscribe(OnTargetUpdate));
-            _disposables.Add(_boundsSub.Subscribe(OnBoundsReset));
+            if (_initialized) return;
+            _initialized = true;
+
+            _currentTarget = _defaultTarget;
+
+            _targetSubscription = _targetSub.Subscribe(OnTargetUpdate);
+            _boundsSubscription = _boundsSub.Subscribe(_ => OnBoundsReset());
+            _spawnedSubscription = _spawnedSub.Subscribe(OnPlayerSpawned);
+            _diedSubscription = _diedSub.Subscribe(_ => OnPlayerDied());
+
+            if (_currentTarget != null)
+                ApplyTarget(_currentTarget);
         }
 
-        public void UpdateTargets(Transform follow, Collider2D boundary, Transform lockedRoomTarget = null)
+        public void SetTarget(Transform target)
         {
-            var followRigs = _config.GetFollowRigs();
-            for (int i = 0; i < followRigs.Count; i++)
-            {
-                var rig = followRigs[i];
-                if (rig.camera != null && follow != null)
-                    rig.camera.Follow = follow;
-                SetBoundary(rig.confiner, boundary);
-            }
-
-            var nonFollowRigs = _config.GetNonFollowRigs();
-            for (int i = 0; i < nonFollowRigs.Count; i++)
-            {
-                var rig = nonFollowRigs[i];
-                if (rig.camera == null) continue;
-
-                if (lockedRoomTarget != null && rig.mode == CameraMode.LockedRoom)
-                    rig.camera.Follow = lockedRoomTarget;
-
-                SetBoundary(rig.confiner, boundary);
-            }
+            if (!_initialized || target == null) return;
+            _currentTarget = target;
+            ApplyTarget(target);
         }
 
-        public void ResetBounds()
+        public void SetActiveVcam(CinemachineVirtualCameraBase vcam)
         {
-            for (int i = 0; i < _config.rigs.Count; i++)
-            {
-                SetBoundary(_config.rigs[i].confiner, null);
-            }
+            if (!_initialized) return;
+            _activeVcam = vcam;
+            if (_currentTarget != null)
+                ApplyCameraTarget(vcam, _currentTarget);
         }
 
         public void Dispose()
         {
-            if (_isDisposed) return;
-            _isDisposed = true;
-
-            for (int i = 0; i < _disposables.Count; i++)
-                _disposables[i].Dispose();
-            _disposables.Clear();
+            _targetSubscription?.Dispose();
+            _boundsSubscription?.Dispose();
+            _spawnedSubscription?.Dispose();
+            _diedSubscription?.Dispose();
         }
 
         #endregion
 
         #region Message Handlers
 
-        private void OnTargetUpdate(CameraTargetUpdate req)
+        private void OnPlayerSpawned(PlayerSpawned msg)
         {
-            UpdateTargets(req.FollowTarget, req.Boundary, req.LockedRoomTarget);
+            SetTarget(msg.Player);
         }
 
-        private void OnBoundsReset(CameraBoundsResetRequest _)
+        private void OnPlayerDied()
         {
-            ResetBounds();
+            SetTarget(_defaultTarget);
+        }
+
+        // STUB: Wire up actual target update logic when implemented.
+        private void OnTargetUpdate(CameraTargetUpdate msg)
+        {
+            SetTarget(msg.FollowTarget);
+        }
+
+        // STUB: Wire up actual bounds reset logic when implemented.
+        private void OnBoundsReset()
+        {
+            // Intentionally empty — placeholder for future collision-bounds reset logic.
+        }
+
+        private void ApplyTarget(Transform target)
+        {
+            bool appliedToFollowCamera = false;
+            if (_config != null && _config.rigs != null)
+            {
+                for (int i = 0; i < _config.rigs.Count; i++)
+                {
+                    var rig = _config.rigs[i];
+                    if (!rig.isFollowCam || rig.camera == null) continue;
+
+                    ApplyCameraTarget(rig.camera, target);
+                    appliedToFollowCamera = true;
+                }
+            }
+
+            if (!appliedToFollowCamera && _activeVcam != null)
+                ApplyCameraTarget(_activeVcam, target);
+        }
+
+        private static void ApplyCameraTarget(CinemachineVirtualCameraBase vcam, Transform target)
+        {
+            if (vcam == null || target == null) return;
+            vcam.Follow = target;
+            vcam.LookAt = target;
         }
 
         #endregion
 
-        #region Internal
+        #region Unity Lifecycle
 
-        private void SetBoundary(CinemachineConfiner2D confiner, Collider2D boundary)
+        private void OnDestroy()
         {
-            if (confiner == null) return;
-
-            if (confiner.BoundingShape2D != boundary)
-            {
-                confiner.BoundingShape2D = boundary;
-                confiner.InvalidateBoundingShapeCache();
-            }
+            Dispose();
         }
 
         #endregion

@@ -31,6 +31,7 @@ namespace Game.UI
         private ISubscriber<HudUnfrozenMessage> _unfrozenSub;
         private readonly List<IDisposable> _subscriptions = new();
         private bool _disposed;
+        private bool _isInitialized;
         
         [NonSerialized] private long _currentPhaseRaw;
         private GamePhase _currentPhase => (GamePhase)_currentPhaseRaw;
@@ -39,6 +40,19 @@ namespace Game.UI
 
         void IStartable.Start()
         {
+            Initialize();
+        }
+
+        public void Initialize()
+        {
+            if (_disposed || _isInitialized) return;
+            if (_hudManager == null || _hudState == null)
+            {
+                Debug.LogError("[HudController] Required dependencies were not injected before Initialize().", this);
+                return;
+            }
+
+            _isInitialized = true;
             _phaseSub = GlobalMessagePipe.GetSubscriber<GamePhaseChangedMessage>();
             _subscriptions.Add(_phaseSub.Subscribe(OnPhaseChanged));
 

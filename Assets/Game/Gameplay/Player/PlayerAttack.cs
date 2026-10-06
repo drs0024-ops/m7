@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using UnityEngine;
-using VContainer;
 using Game.Core.Interfaces;
 using System.Collections.Generic;
 
@@ -26,8 +25,8 @@ namespace Game.Gameplay.Player
         private Animator _anim;
         private Coroutine _damageCoroutine;
 
-        [Inject]
-        private void Inject(InputManager inputManager)
+   
+        public void Initialize(InputManager inputManager)
         {
             _inputManager = inputManager;
         }
@@ -40,6 +39,13 @@ namespace Game.Gameplay.Player
 
         private void Update()
         {
+            if (_inputManager == null)
+            {
+                Debug.LogError("[PlayerAttack] _inputManager is null. [Inject] was not called — check PlayerFactory child injection.");
+                enabled = false;
+                return;
+            }
+
             if (_inputManager.AttackWasPressed && _attackTimeCounter >= _timeBetweenAttacks)
             {
                 _attackTimeCounter = 0f;
@@ -47,7 +53,7 @@ namespace Game.Gameplay.Player
             }
 
             _attackTimeCounter += Time.deltaTime;
-        }
+        }   
 
         private void Attack()
         {

@@ -44,7 +44,7 @@ namespace Game.UI
         private IPublisher<CRTStateRequested> _crtPublisher;
         private IPublisher<OptionsOpenRequested> _optionsOpenPublisher;
 
-        private readonly List<IDisposable> _subscriptions = new(3);
+        private readonly List<IDisposable> _subscriptions = new(4);
         private bool _disposed;
         private bool _transitioning;
         private float _transitionTimer;
@@ -55,6 +55,11 @@ namespace Game.UI
         #endregion
 
         #region Unity Lifecycle
+
+        private void Awake()
+        {
+            SetActiveSafe(_mainMenuPanel, false);
+        }
 
         private void Start()
         {
@@ -69,11 +74,23 @@ namespace Game.UI
             _subscriptions.Add(GlobalMessagePipe.GetSubscriber<GamePhaseChangedMessage>()
                 .Subscribe(OnPhaseChanged));
 
+            _subscriptions.Add(GlobalMessagePipe.GetSubscriber<GameStateChanged>()
+                .Subscribe(OnGameStateChanged));
+
             _subscriptions.Add(GlobalMessagePipe.GetSubscriber<OptionsPanelStateChanged>()
                 .Subscribe(msg =>
                 {
-                    if (!msg.IsOpen)
-                        TransitionTo(() => _mainMenuPanel.SetActive(true));
+                    if (!msg.IsOpen && !msg.FromPause)
+                    {
+                        TransitionTo(() =>
+                        {
+                            _mainMenuPanel.SetActive(true);
+                            bool hasSave = _saveManager.HasSave;
+                            _bootText.SetItemEnabled(1, hasSave);
+                            if (hasSave)
+                                _bootText.SelectAction(1);
+                        });
+                    }
                 }));
 
             ShowMainMenu(_wasInGameplay).Forget();
@@ -104,7 +121,7 @@ namespace Game.UI
         }
 
         #endregion
-
+ 
         #region Transition
 
         private void TransitionTo(Action swapAction)
@@ -126,6 +143,7 @@ namespace Game.UI
         private void OnScreenSwapped(ScreenSwapped _)
         {
             if (!_transitioning) return;
+            Debug.Log("[Menu] CRT screen swap completed; executing pending menu action.");
             ForceCompleteTransition();
         }
 
@@ -174,11 +192,15 @@ namespace Game.UI
                 _crtPublisher.Publish(new CRTStateRequested(CRTState.Hidden));
                 _audio.StopMusic();
             }
-            else if ((msg.NewPhase & GamePhase.Letter) == 0 && !_menuShown)
-            {
-                ShowMainMenu(_wasInGameplay).Forget();
-                _wasInGameplay = false;
-            }
+        }
+
+        private void OnGameStateChanged(GameStateChanged msg)
+        {
+            if (msg.State != GameState.MainMenu || !_wasInGameplay || _menuShown)
+                return;
+
+            _wasInGameplay = false;
+            ShowMainMenu(fromGameplay: true).Forget();
         }
 
         #endregion
@@ -195,6 +217,7 @@ namespace Game.UI
         public void OnLoadGameClicked()
         {
             if (_disposed) return;
+            Debug.Log("[Menu] Load Game selected; starting CRT transition.");
             _audio.PlaySFX(SoundType.MenuClick);
             TransitionTo(() => _loadRequestPublisher.Publish(default));
         }
@@ -232,25 +255,18 @@ namespace Game.UI
 
             try
             {
-                _mainMenuPanel.SetActive(true);
-
                 _audio.PlayMusic(MusicType.MainMenu);
                 await _crtBoot.Play();
                 await UniTask.Delay((int)(_crtBoot.PostDelay * 1000), ignoreTimeScale: true);
 
                 if (_disposed) return;
 
+                _mainMenuPanel.SetActive(true);
                 _crtPublisher.Publish(new CRTStateRequested(CRTState.MenuIdle));
 
-                if (fromGameplay)
-                    _bootText.SetReturnTitle(_saveManager.HasSave
-                        ? "SYSTEM BOOT: SAVE DETECTED"
-                        : "SYSTEM BOOT: NORMAL");
-
-                _bootText.StartSequence(fromGameplay);
-
-                if (!_saveManager.HasSave)
-                    _bootText.SetItemEnabled(1, false);
+                bool hasSave = _saveManager.HasSave;
+                _bootText.StartSequence(fromGameplay, hasSave);
+                _bootText.SetItemEnabled(1, hasSave);
 
                 _audio.PlayMusic(MusicType.MainMenu);
             }

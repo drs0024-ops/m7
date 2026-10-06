@@ -5,6 +5,9 @@ using Game.Core.Interfaces;
 using Game.Core.StateMachine;
 using System;
 using Game.Gameplay.Player;
+using Game.Core.Messages;
+using MessagePipe;
+using VContainer;
 
 namespace Game.Gameplay.Enemies
 {
@@ -26,6 +29,18 @@ public class Enemy : MonoBehaviour, IDamagable, IEnemyMoveable, ITriggerCheckabl
 
     private EnemyRoot _root;
     private StateMachine _machine;
+    private ISubscriber<EnemyInvestigationRequested> _investigationRequestedSubscriber;
+    private ISubscriber<EnemyInvestigationCancelled> _investigationCancelledSubscriber;
+    private IDisposable _investigationRequestedSubscription;
+    private IDisposable _investigationCancelledSubscription;
+    private bool _invisibilityInvestigationInitialized;
+    [SerializeField, Min(0f)] private float _investigationArrivalDistance = 0.25f;
+
+    /// <summary>Whether this enemy is currently investigating a broadcast position.</summary>
+    public bool IsInvestigating { get; private set; }
+
+    /// <summary>Current world target for an investigation.</summary>
+    public Vector2 InvestigationTarget { get; private set; }
 
 #region Behavior SO's
     [Header("Enemy Behavior SO's")]
@@ -50,6 +65,57 @@ public class Enemy : MonoBehaviour, IDamagable, IEnemyMoveable, ITriggerCheckabl
     public bool IsGrounded { get { return _isGrounded; } }
     public bool IsAggroed { get; set; }
     public bool IsWithinStrickingDistance { get; set; }
+
+    [Inject]
+    private void InjectInvisibilityInvestigation(
+        ISubscriber<EnemyInvestigationRequested> requestedSubscriber,
+        ISubscriber<EnemyInvestigationCancelled> cancelledSubscriber)
+    {
+        _investigationRequestedSubscriber = requestedSubscriber;
+        _investigationCancelledSubscriber = cancelledSubscriber;
+    }
+
+    /// <summary>Subscribes this enemy to targeted investigation commands.</summary>
+    public void InitializeInvisibilityInvestigation()
+    {
+        if (_invisibilityInvestigationInitialized) return;
+#if UNITY_EDITOR
+        Debug.Assert(_investigationRequestedSubscriber != null && _investigationCancelledSubscriber != null,
+            "Enemy investigation MessagePipe dependencies must be injected before initialization.", this);
+#endif
+        if (_investigationRequestedSubscriber == null || _investigationCancelledSubscriber == null) return;
+
+        _investigationRequestedSubscription = _investigationRequestedSubscriber.Subscribe(OnInvestigationRequested);
+        _investigationCancelledSubscription = _investigationCancelledSubscriber.Subscribe(OnInvestigationCancelled);
+        _invisibilityInvestigationInitialized = true;
+    }
+
+    private void OnInvestigationRequested(EnemyInvestigationRequested message)
+    {
+        if (message.EnemyInstanceId != gameObject.GetInstanceID()) return;
+        InvestigationTarget = message.Position;
+        IsInvestigating = true;
+    }
+
+    private void OnInvestigationCancelled(EnemyInvestigationCancelled message)
+    {
+        if (message.EnemyInstanceId == gameObject.GetInstanceID())
+            IsInvestigating = false;
+    }
+
+    /// <summary>Moves toward the active investigation target and clears it on arrival.</summary>
+    public void MoveToInvestigationTarget(float deltaTime)
+    {
+        if (!IsInvestigating || RB == null || EnemyStats == null) return;
+
+        Vector2 nextPosition = Vector2.MoveTowards(
+            RB.position, InvestigationTarget, EnemyStats.MaxRunSpeed * deltaTime);
+        RB.MovePosition(nextPosition);
+
+        float arrivalDistanceSquared = _investigationArrivalDistance * _investigationArrivalDistance;
+        if ((nextPosition - InvestigationTarget).sqrMagnitude <= arrivalDistanceSquared)
+            IsInvestigating = false;
+    }
     
     //[SerializeField] private Collider2D parentCollider;
     [Header("Colliders")]
@@ -1533,6 +1599,8 @@ public class Enemy : MonoBehaviour, IDamagable, IEnemyMoveable, ITriggerCheckabl
     
     void OnDestroy()
     {
+         _investigationRequestedSubscription?.Dispose();
+         _investigationCancelledSubscription?.Dispose();
        // EnemyCollisionManager.Instance.UnregisterEnemy(this);
     }
 

@@ -9,6 +9,7 @@
         "MessagePipe",
         "MessagePipe.VContainer",
         "VContainer",
+        "UniTask",
         "UI"
     ],
     "autoReferenced": false,

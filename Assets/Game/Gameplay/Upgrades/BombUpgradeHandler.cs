@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
+using Game.Core.Interfaces;
 using Game.Core.Messages;
 using Game.Gameplay.Upgrades;
 using MessagePipe;
 using UnityEngine;
-using VContainer;
-using VContainer.Unity;
 
 namespace Game.Gameplay.Player
 {
@@ -25,10 +24,9 @@ namespace Game.Gameplay.Player
 
         #region Dependencies
 
-        [Inject]
         private ISubscriber<UpgradeStateChanged> _upgradeStateChangedSubscriber;
-        [Inject]
         private IPublisher<BombPlaced> _bombPlacedPublisher;
+        private IUpgradeState _upgradeState;
 
         #endregion
 
@@ -48,8 +46,23 @@ namespace Game.Gameplay.Player
         public int BombsRemaining => _bombsRemaining;
         public float CooldownRemaining => Mathf.Max(0f, _cooldownTimer);
 
+        /// <summary>
+        /// Called by ProjectLifetimeScope build callback. Explicit dependency injection
+        /// to bypass VContainer 1.19 RegisterComponentInNewPrefab inject edge case.
+        /// </summary>
+        public void Initialize(
+            ISubscriber<UpgradeStateChanged> subscriber,
+            IPublisher<BombPlaced> publisher,
+            IUpgradeState upgradeState)
+        {
+            _upgradeStateChangedSubscriber = subscriber;
+            _bombPlacedPublisher = publisher;
+            _upgradeState = upgradeState;
+        }
+
         public void TryPlaceBomb(Vector2 position)
         {
+            if (_disposed) return;
             if (!CanPlaceBomb) return;
 
             _bombsRemaining--;
@@ -79,7 +92,23 @@ namespace Game.Gameplay.Player
 
         private void Start()
         {
+            if (_upgradeStateChangedSubscriber == null)
+            {
+                Debug.LogError("[Phase2 Verify] BombUpgradeHandler.Start disabled: upgrade subscriber is missing.");
+                enabled = false;
+                return;
+            }
+
             _subscriptions.Add(_upgradeStateChangedSubscriber.Subscribe(OnUpgradeStateChanged));
+
+            var bombUpgradeUnlocked = _upgradeState != null && _upgradeState.IsUnlocked(UpgradeIDs.Bomb);
+            if (bombUpgradeUnlocked)
+            {
+                _isUnlocked = true;
+                _bombsRemaining = _maxBombs;
+            }
+
+            Debug.Log($"[Phase2 Verify] BombUpgradeHandler.Start: upgradeStateResolved={_upgradeState != null}, bombUpgradeUnlocked={bombUpgradeUnlocked}, bombsRemaining={_bombsRemaining}, canPlaceBomb={CanPlaceBomb}.");
         }
 
         private void Update()
@@ -99,6 +128,7 @@ namespace Game.Gameplay.Player
 
         private void OnUpgradeStateChanged(UpgradeStateChanged message)
         {
+            if (_disposed) return;
             if (message.UpgradeID != UpgradeIDs.Bomb) return;
 
             if (message.IsActive && !_isUnlocked)

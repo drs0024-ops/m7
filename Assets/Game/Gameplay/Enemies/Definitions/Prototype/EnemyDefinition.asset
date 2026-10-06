@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: EnemyDefinition
+  m_EditorClassIdentifier: Gameplay:Game.Gameplay.Enemies.Runtime:EnemyDefinition
+  _typeId: health
+  _stats:
+    _maxHealth: 10
+    _moveSpeed: 7
+    _perceptionRange: 20
+    _attackRange: 5
+    _attackDamage: 1
+    _attackCooldown: 3
+  _stateGraph: {fileID: 11400000, guid: 122eabb7d0d7c435cb2bc6420ed18b55, type: 2}
+  _modules:
+  - {fileID: 11400000, guid: ab28d14c813ff4a57b707e5b3024358d, type: 2}
+  - {fileID: 11400000, guid: 6e2a85bf2093841198a91b2860fbf2f8, type: 2}

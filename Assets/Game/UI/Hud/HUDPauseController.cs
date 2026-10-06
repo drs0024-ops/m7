@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Cysharp.Threading.Tasks;
 using Game.Core;
 using Game.Core.Messages;
 using Game.Gameplay.Player;
@@ -28,34 +27,36 @@ namespace Game.UI
 
         [Inject] private InputManager _inputManager;
         [Inject] private HudState _hudState;
+        [Inject] private ISubscriber<GamePaused> _pausedSub;
+        [Inject] private ISubscriber<GameResumed> _resumedSub;
+        [Inject] private ISubscriber<CutsceneStarted> _cutsceneStartedSub;
+        [Inject] private ISubscriber<CutsceneFinished> _cutsceneFinishedSub;
 
-        private ISubscriber<GamePaused> _pausedSub;
-        private ISubscriber<GameResumed> _resumedSub;
-        private readonly List<IDisposable> _subscriptions = new();
+        private readonly List<IDisposable> _subscriptions = new(5);
 
         private bool _isPaused;
         private bool _isHolding;
+        private bool _isCutscenePlaying;
         private bool _disposed;
         private float _holdTimer;
         private int _tweenId = -1;
         private int _pulseTweenId = -1;
 
-        public HUDPauseController() { }
-
         void IStartable.Start()
         {
             _blackFadeImage.color = new Color(0, 0, 0, 0f);
 
-            _pausedSub = GlobalMessagePipe.GetSubscriber<GamePaused>();
-            _subscriptions.Add(_pausedSub.Subscribe(_ => Pause().Forget()));
+            _subscriptions.Add(_pausedSub.Subscribe(_ => Pause()));
+            _subscriptions.Add(_resumedSub.Subscribe(_ => Resume()));
 
-            _resumedSub = GlobalMessagePipe.GetSubscriber<GameResumed>();
-            _subscriptions.Add(_resumedSub.Subscribe(_ => Resume().Forget()));
+            // Step 8: Hide HUD during cutscenes
+            _subscriptions.Add(_cutsceneStartedSub.Subscribe(_ => HideForCutscene()));
+            _subscriptions.Add(_cutsceneFinishedSub.Subscribe(_ => ShowAfterCutscene()));
         }
 
         private void Update()
         {
-            if (_disposed || !_isPaused || _hudState.IsFrozen) return;
+            if (_disposed || !_isPaused || _hudState.IsFrozen || _isCutscenePlaying) return;
 
             if (_inputManager.EscapeIsHeld)
             {
@@ -80,7 +81,7 @@ namespace Game.UI
             }
         }
 
-        private async UniTaskVoid Pause()
+        private void Pause()
         {
             _isPaused = true;
             _isHolding = false;
@@ -94,15 +95,32 @@ namespace Game.UI
                 .setOnComplete(() => _tweenId = -1).id;
         }
 
-        private async UniTaskVoid Resume()
+        private void Resume()
         {
             _isPaused = false;
             _isHolding = false;
             _holdTimer = 0f;
 
-            await UniTask.Delay((int)(_handshakeDelay * 1000f), ignoreTimeScale: true);
-            if (_disposed) return;
+            if (_tweenId != -1) LeanTween.cancel(_tweenId);
 
+            _tweenId = LeanTween.alpha(_hudCanvasGroup.gameObject, 1f, _fadeDuration)
+                .setEase(LeanTweenType.easeInOutQuad)
+                .setIgnoreTimeScale(true)
+                .setDelay(_handshakeDelay)
+                .setOnComplete(() => _tweenId = -1).id;
+        }
+
+        // Step 8: Cutscene visibility
+        private void HideForCutscene()
+        {
+            _isCutscenePlaying = true;
+            if (_tweenId != -1) LeanTween.cancel(_tweenId);
+            _hudCanvasGroup.alpha = 0f;
+        }
+
+        private void ShowAfterCutscene()
+        {
+            _isCutscenePlaying = false;
             if (_tweenId != -1) LeanTween.cancel(_tweenId);
 
             _tweenId = LeanTween.alpha(_hudCanvasGroup.gameObject, 1f, _fadeDuration)
@@ -162,13 +180,24 @@ namespace Game.UI
             LeanTween.alpha(_blackFadeImage.gameObject, 1f, 0.5f)
                 .setEase(LeanTweenType.easeInOutQuad)
                 .setIgnoreTimeScale(true)
-                .setOnComplete(() => Application.Quit());
+                .setOnComplete(() =>
+                {
+#if UNITY_EDITOR
+                    UnityEditor.EditorApplication.isPlaying = false;
+#else
+                    Application.Quit();
+#endif
+                });
         }
 
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
+
+            for (int i = 0; i < _subscriptions.Count; i++)
+                _subscriptions[i].Dispose();
+            _subscriptions.Clear();
 
             if (_tweenId != -1) LeanTween.cancel(_tweenId);
             if (_pulseTweenId != -1) LeanTween.cancel(_pulseTweenId);

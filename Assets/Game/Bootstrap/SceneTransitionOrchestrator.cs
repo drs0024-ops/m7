@@ -13,12 +13,15 @@ namespace Game.Bootstrap
     /// Orchestrates the full scene transition sequence:
     /// fade out → load/activate → unload old → cleanup → fade in.
     /// Publishes SceneTransitionStarted / SceneTransitionCompleted.
+    /// Returns a TransitionResult so callers can react to failure.
+    /// Cancellable via Dispose or external cancellation.
     /// </summary>
     public class SceneTransitionOrchestrator : IDisposable
     {
         #region Dependencies
 
         private const int TRANSITION_BUDGET_MS = 2000;
+        private const int TRANSITION_TIMEOUT_MS = 15000;
 
         private readonly IPublisher<SceneTransitionStarted> _startedPublisher;
         private readonly IPublisher<SceneTransitionCompleted> _completedPublisher;
@@ -33,6 +36,7 @@ namespace Game.Bootstrap
 
         private bool _isTransitioning;
         private bool _disposed;
+        private CancellationTokenSource _activeCts;
 
         #endregion
 
@@ -62,13 +66,18 @@ namespace Game.Bootstrap
         {
             if (_disposed) return;
             _disposed = true;
+
+            // Cancel any in-flight transition
+            _activeCts?.Cancel();
+            _activeCts?.Dispose();
+            _activeCts = null;
         }
 
         #endregion
 
         #region Public API
 
-        public async UniTask TransitionAsync(
+        public async UniTask<TransitionResult> TransitionAsync(
             string sceneName,
             Action onComplete,
             bool spawnAtDoor,
@@ -77,25 +86,24 @@ namespace Game.Bootstrap
             string sourceSceneToUnload = null,
             LevelStateSnapshot? snapshot = null)
         {
-            if (_disposed) return;
+            if (_disposed) return TransitionResult.Failure("Orchestrator disposed.");
 
-            // FIX #52: Log dropped transitions instead of silently ignoring
             if (_isTransitioning)
             {
                 Debug.LogWarning($"[Orchestrator] Transition to '{sceneName}' dropped: already transitioning.");
-                return;
+                return TransitionResult.Failure("Another transition is in progress.");
             }
 
             _isTransitioning = true;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            string source = string.IsNullOrEmpty(sourceSceneToUnload) ? "(none)" : sourceSceneToUnload;
-#endif
+            #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                string source = string.IsNullOrEmpty(sourceSceneToUnload) ? "(none)" : sourceSceneToUnload;
+            #endif
 
-            // FIX #49: Per-transition CTS instead of a field-level "poisoned" CTS
-            using var cts = new CancellationTokenSource();
-            var token = cts.Token;
+            _activeCts = new CancellationTokenSource();
+            _activeCts.CancelAfter(TRANSITION_TIMEOUT_MS);
+            var token = _activeCts.Token;
 
             _startedPublisher.Publish(new SceneTransitionStarted(sceneName));
 
@@ -114,7 +122,6 @@ namespace Game.Bootstrap
 
                 token.ThrowIfCancellationRequested();
 
-                // FIX #47: Use registry instead of hardcoded "Bootstrap"
                 await _cleanup.UnloadObsoleteScenesAsync(
                     sceneName,
                     persistentSceneName: _sceneRegistry.PersistentScene,
@@ -123,47 +130,49 @@ namespace Game.Bootstrap
 
                 token.ThrowIfCancellationRequested();
 
-                // FIX #46: Yield on UnloadUnusedAssets instead of fire-and-forget
-                var asyncOp = Resources.UnloadUnusedAssets();
-                while (!asyncOp.isDone)
-                    await UniTask.Yield();
-
-                token.ThrowIfCancellationRequested();
-
                 await _fade.FadeInAsync(token);
                 fadedOut = false;
 
-                onComplete?.Invoke();
                 _completedPublisher.Publish(new SceneTransitionCompleted(sceneName));
+                onComplete?.Invoke();
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-                sw.Stop();
-                long ms = sw.ElapsedMilliseconds;
-                Debug.Log($"[Perf] Transition \"{source}\" → \"{sceneName}\" took {ms}ms");
-                if (ms > TRANSITION_BUDGET_MS)
-                    Debug.LogWarning($"[Perf][WARN] Transition \"{source}\" → \"{sceneName}\" took {ms}ms (budget: {TRANSITION_BUDGET_MS}ms)");
-#endif
+                #if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    sw.Stop();
+                    long ms = sw.ElapsedMilliseconds;
+                    Debug.Log($"[Perf] Transition \"{source}\" → \"{sceneName}\" took {ms}ms");
+                    if (ms > TRANSITION_BUDGET_MS)
+                        Debug.LogWarning($"[Perf][WARN] Transition \"{source}\" → \"{sceneName}\" took {ms}ms (budget: {TRANSITION_BUDGET_MS}ms)");
+                #endif
+
+                return TransitionResult.Ok;
             }
             catch (OperationCanceledException)
             {
                 if (fadedOut)
                 {
                     try { await _fade.FadeInAsync(CancellationToken.None); }
-                    catch { /* best effort */ }
+                    catch { }
                 }
+
+                return TransitionResult.CancelledResult;
             }
             catch (Exception e)
             {
                 Debug.LogError($"[Orchestrator] Transition to '{sceneName}' failed: {e}");
+
                 if (fadedOut)
                 {
                     try { await _fade.FadeInAsync(CancellationToken.None); }
-                    catch { /* best effort */ }
+                    catch { }
                 }
+
+                return TransitionResult.Failure(e.Message);
             }
             finally
             {
                 _isTransitioning = false;
+                _activeCts?.Dispose();
+                _activeCts = null;
             }
         }
 

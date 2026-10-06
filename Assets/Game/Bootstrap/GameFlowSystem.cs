@@ -29,9 +29,8 @@ namespace Game.Bootstrap
         private readonly LevelProgressionManager _levelProgression;
         private readonly SaveManager _saveManager;
         private readonly SceneRegistry _sceneRegistry;
-        private readonly CutsceneSelector _cutsceneSelector;
-        private readonly CutscenePlayer _cutscenePlayer;
-        private readonly IPublisher<NavigateToMenu> _navigateToMenuPublisher;
+        private readonly IIntroSequenceController _introController;
+        private readonly IPublisher<CRTStateRequested> _crtStatePublisher;
         private readonly ISubscriber<StartGameRequested> _startSub;
         private readonly ISubscriber<PauseGameRequested> _pauseSub;
         private readonly ISubscriber<ResumeGameRequested> _resumeSub;
@@ -40,6 +39,7 @@ namespace Game.Bootstrap
         private readonly ISubscriber<PlayerDied> _diedSub;
         private readonly ISubscriber<ClimaxTriggered> _climaxSub;
         private readonly ISubscriber<ClimaxCompleted> _climaxCompletedSub;
+        private readonly SceneLoaderService _loader;
 
         #endregion
 
@@ -61,9 +61,8 @@ namespace Game.Bootstrap
             LevelProgressionManager levelProgression,
             SaveManager saveManager,
             SceneRegistry sceneRegistry,
-            CutsceneSelector cutsceneSelector,
-            CutscenePlayer cutscenePlayer,
-            IPublisher<NavigateToMenu> navigateToMenuPublisher,
+            IIntroSequenceController introController,
+            IPublisher<CRTStateRequested> crtStatePublisher,
             ISubscriber<StartGameRequested> startSub,
             ISubscriber<PauseGameRequested> pauseSub,
             ISubscriber<ResumeGameRequested> resumeSub,
@@ -71,7 +70,8 @@ namespace Game.Bootstrap
             ISubscriber<VideoFinished> videoFinishedSub,
             ISubscriber<PlayerDied> diedSub,
             ISubscriber<ClimaxTriggered> climaxSub,
-            ISubscriber<ClimaxCompleted> climaxCompletedSub)
+            ISubscriber<ClimaxCompleted> climaxCompletedSub,
+            SceneLoaderService loader)
         {
             _stateMachine = stateMachine;
             _phaseController = phaseController;
@@ -80,9 +80,9 @@ namespace Game.Bootstrap
             _levelProgression = levelProgression;
             _saveManager = saveManager;
             _sceneRegistry = sceneRegistry;
-            _cutsceneSelector = cutsceneSelector;
-            _cutscenePlayer = cutscenePlayer;
-            _navigateToMenuPublisher = navigateToMenuPublisher;
+            _introController = introController;
+            _crtStatePublisher = crtStatePublisher;
+            _loader = loader;
             _startSub = startSub;
             _pauseSub = pauseSub;
             _resumeSub = resumeSub;
@@ -105,35 +105,60 @@ namespace Game.Bootstrap
             _subscriptions.Add(_pauseSub.Subscribe(_ => OnPause()));
             _subscriptions.Add(_resumeSub.Subscribe(_ => OnResume()));
             _subscriptions.Add(_loadSub.Subscribe(_ => OnLoadAsync().Forget()));
-            _subscriptions.Add(_videoFinishedSub.Subscribe(_ => OnVideoFinished()));
+            _subscriptions.Add(_videoFinishedSub.Subscribe(_ => _introController.OnVideoFinished()));
             _subscriptions.Add(_diedSub.Subscribe(_ => OnPlayerDied()));
             _subscriptions.Add(_climaxSub.Subscribe(_ => OnClimaxTriggered()));
             _subscriptions.Add(_climaxCompletedSub.Subscribe(_ => OnClimaxCompleted()));
 
             GameState target = _config.initialState;
+            Debug.Log($"[IntroTrace] GameFlowSystem.Start: initialState={target}, playIntroOnStart={_config.playIntroOnStart}.");
             if (!_stateMachine.IsInState(target))
                 _stateMachine.ForceState(target);
 
             _inputSwitcher.SwitchTo(target);
-            InitialLoadAsync().Forget();
+
+            if (_config.playIntroOnStart)
+            {
+                Debug.Log("[IntroTrace] GameFlowSystem.Start: calling PlayIntroAsync.");
+                PlayStartupIntroAsync().Forget();
+            }
+            else
+            {
+                Debug.Log("[IntroTrace] GameFlowSystem.Start: skipping intro and loading initial scene.");
+                InitialLoadAsync().Forget();
+            }
         }
 
         #endregion
 
         #region Message Handlers
 
+        private async UniTask PlayStartupIntroAsync()
+        {
+            bool enteredIntroState = _stateMachine.TransitionTo(GameState.IntroVideo);
+            if (enteredIntroState)
+                _inputSwitcher.SwitchTo(GameState.IntroVideo);
+
+            try
+            {
+                await _introController.PlayIntroAsync();
+            }
+            finally
+            {
+                if (enteredIntroState && _stateMachine.IsInState(GameState.IntroVideo))
+                {
+                    _stateMachine.TransitionTo(GameState.MainMenu);
+                    _inputSwitcher.SwitchTo(GameState.MainMenu);
+                }
+            }
+        }
+
         private async UniTask OnStartGameAsync()
         {
             await ExecuteTransition(GameState.Gameplay, GamePhase.Gameplay, async () =>
             {
                 await _levelProgression.StartLevel(0);
-
-                var cutscene = _cutsceneSelector.GetForNewGame();
-                if (cutscene != null)
-                {
-                    _phaseController.SetPhase(GamePhase.Cinematic);
-                    await _cutscenePlayer.PlayAsync(cutscene);
-                }
+                await _introController.PlayNewGameCutsceneAsync();
             });
         }
 
@@ -154,34 +179,32 @@ namespace Game.Bootstrap
 
             _stateMachine.TransitionTo(GameState.Gameplay);
             _phaseController.SetPhase(GamePhase.Gameplay);
+            _crtStatePublisher.Publish(new CRTStateRequested(CRTState.Hidden));
             _inputSwitcher.SwitchTo(GameState.Gameplay);
         }
 
         private async UniTask OnLoadAsync()
         {
+            if (_disposed) return;
+            Debug.Log("[GameFlow] Load request received.");
+            if (!await _saveManager.LoadAsync())
+            {
+                Debug.LogWarning("[GameFlow] Load request stopped because the save could not be loaded.");
+                return;
+            }
+
             string levelName = _saveManager.CurrentLevelName;
-            if (string.IsNullOrEmpty(levelName)) return;
+            if (string.IsNullOrEmpty(levelName))
+            {
+                Debug.LogWarning("[GameFlow] Load request stopped because the save has no level name.");
+                return;
+            }
 
             await ExecuteTransition(GameState.Gameplay, GamePhase.Gameplay, async () =>
             {
                 await _levelProgression.StartLevelByName(levelName);
-
-                var cutscene = _cutsceneSelector.GetForLoad(levelName);
-                if (cutscene != null)
-                {
-                    _phaseController.SetPhase(GamePhase.Cinematic);
-                    await _cutscenePlayer.PlayAsync(cutscene);
-                }
+                await _introController.PlayLoadCutsceneAsync(levelName);
             });
-        }
-
-        private void OnVideoFinished()
-        {
-            // FIX #73: Only transition to MainMenu if we're actually in the IntroVideo state.
-            // Prevents spurious MainMenu loads when a gameplay cutscene finishes.
-            if (!_stateMachine.IsInState(GameState.IntroVideo)) return;
-
-            ExecuteTransition(GameState.MainMenu, GamePhase.Menu, () => UniTask.CompletedTask).Forget();
         }
 
         private void OnPlayerDied()
@@ -216,8 +239,8 @@ namespace Game.Bootstrap
             if (_disposed) return;
 
             if (_config.initialState == GameState.MainMenu)
-                _navigateToMenuPublisher.Publish(new NavigateToMenu());
-        }
+                await _loader.EnsureLoadedAndActivate(_sceneRegistry.MainMenuScene);
+        }   
 
         /// <summary>
         /// DRY transition pattern: guard → Loading → await action → success/failure.
@@ -228,7 +251,12 @@ namespace Game.Bootstrap
             GamePhase targetPhase,
             Func<UniTask> loadAction)
         {
-            if (!_stateMachine.CanTransitionTo(GameState.Loading)) return;
+            if (!_stateMachine.CanTransitionTo(GameState.Loading))
+            {
+                Debug.LogWarning(
+                    $"[GameFlow] Cannot start transition to {targetState} from {_stateMachine.CurrentState}.");
+                return;
+            }
 
             GameState previousState = _stateMachine.CurrentState;
             _stateMachine.TransitionTo(GameState.Loading);
@@ -240,6 +268,8 @@ namespace Game.Bootstrap
 
                 _stateMachine.TransitionTo(targetState);
                 _phaseController.SetPhase(targetPhase);
+                if (targetState == GameState.Gameplay)
+                    _crtStatePublisher.Publish(new CRTStateRequested(CRTState.Hidden));
                 _inputSwitcher.SwitchTo(targetState);
             }
             catch (OperationCanceledException) when (_cts.IsCancellationRequested)
@@ -253,7 +283,7 @@ namespace Game.Bootstrap
                     GameState.Gameplay => GameState.MainMenu,
                     GameState.Paused   => GameState.MainMenu,
                     GameState.QuitGame => GameState.MainMenu,
-                    _                  => previousState
+                    _                  => GameState.MainMenu
                 };
 
                 Debug.LogError(

@@ -32,6 +32,7 @@ namespace Game.UI
 
         [Header("Panel")]
         [SerializeField] private GameObject _panelContent;
+        private CanvasGroup _panelCanvasGroup;
 
         [Header("Dependencies")]
         [Inject] private InputManager _inputManager;
@@ -52,6 +53,7 @@ namespace Game.UI
         private int _selectedIndex;
         private bool _panelOpen;
         private bool _subPanelOpen;
+        private bool _openedFromPause;
         private bool _disposed;
 
         private bool _upHeld;
@@ -87,6 +89,21 @@ namespace Game.UI
                 return;
             }
 
+            if (_panelContent == null)
+            {
+                Debug.LogError("[OptionsMenu] _panelContent is not assigned!", this);
+                enabled = false;
+                return;
+            }
+
+            _panelCanvasGroup = _panelContent.GetComponent<CanvasGroup>();
+            if (_panelContent == gameObject && _panelCanvasGroup == null)
+            {
+                Debug.LogError("[OptionsMenu] The controller is on _panelContent; a CanvasGroup is required to hide it without disabling the controller.", this);
+                enabled = false;
+                return;
+            }
+
             for (int i = 0; i < _subPanels.Length; i++)
                 _subPanels[i].SetActive(false);
 
@@ -105,7 +122,7 @@ namespace Game.UI
         {
             if (!enabled) return;
 
-            _subscriptions.Add(_openSub.Subscribe(_ => OpenPanel()));
+            _subscriptions.Add(_openSub.Subscribe(msg => OpenPanel(msg.FromPause)));
             _subscriptions.Add(_closeSub.Subscribe(_ => ClosePanel()));
         }
 
@@ -206,13 +223,14 @@ namespace Game.UI
 
         #region Show / Hide
 
-        private void OpenPanel()
+        private void OpenPanel(bool fromPause)
         {
             if (_disposed || _panelOpen) return;
             _panelOpen = true;
+            _openedFromPause = fromPause;
             ResetState();
             SetVisualActive(true);
-            _stateChangedPublisher.Publish(new OptionsPanelStateChanged(true));
+            _stateChangedPublisher.Publish(new OptionsPanelStateChanged(true, _openedFromPause));
         }
 
         private void ClosePanel()
@@ -223,11 +241,19 @@ namespace Game.UI
                 _subPanels[i].SetActive(false);
             _subPanelOpen = false;
             SetVisualActive(false);
-            _stateChangedPublisher.Publish(new OptionsPanelStateChanged(false));
+            _stateChangedPublisher.Publish(new OptionsPanelStateChanged(false, _openedFromPause));
         }
 
         private void SetVisualActive(bool active)
         {
+            if (_panelCanvasGroup != null)
+            {
+                _panelCanvasGroup.alpha = active ? 1f : 0f;
+                _panelCanvasGroup.interactable = active;
+                _panelCanvasGroup.blocksRaycasts = active;
+                return;
+            }
+
             _panelContent.SetActive(active);
         }
 

@@ -114,9 +114,7 @@ namespace Game.Bootstrap
                 case GameState.MainMenu:
                     HandleMainMenuAsync(_cts.Token).Forget();
                     break;
-                case GameState.IntroVideo:
-                    HandleIntroAsync(_cts.Token).Forget();
-                    break;
+
                 case GameState.QuitGame:
                     QuitApplication();
                     break;
@@ -126,11 +124,11 @@ namespace Game.Bootstrap
         // FIX #65: Editor-safe quit
         private static void QuitApplication()
         {
-#if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-#else
-            Application.Quit();
-#endif
+            #if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+            #else
+                Application.Quit();
+            #endif
         }
 
         #endregion
@@ -230,27 +228,7 @@ namespace Game.Bootstrap
             }
         }
 
-        private async UniTask HandleIntroAsync(CancellationToken token)
-        {
-            // FIX #64: Guard against re-entrant transitions
-            if (_isTransitioning) return;
-
-            _isTransitioning = true;
-            try
-            {
-                await _orchestrator.TransitionAsync(
-                    sceneName: _sceneRegistry.IntroScene,
-                    onComplete: null,
-                    spawnAtDoor: false,
-                    door: DoorToSpawnAt.None,
-                    fromRight: false,
-                    sourceSceneToUnload: _sceneRegistry.MainMenuScene);
-            }
-            finally
-            {
-                _isTransitioning = false;
-            }
-        }
+        
 
         #endregion
     }

@@ -8,5 +8,9 @@ namespace Game.Core
     {
         [Header("Initial")]
         public GameState initialState = GameState.MainMenu;
+
+        [Header("Intro")]
+        public bool playIntroOnStart = true; 
+        
     }
 }   

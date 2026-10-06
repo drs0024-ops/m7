@@ -10,7 +10,7 @@ namespace Game.Bootstrap
 {
     /// <summary>
     /// Handles the Escape key as a context-sensitive toggle:
-    /// Gameplay → Pause, Paused → Resume.
+    /// Cinematic → Skip cutscene, Gameplay → Pause, Paused → Resume.
     /// Yields Escape handling to OptionsMenuController while the Options panel is open.
     /// Ticks every frame via ITickable. Respects GamePhaseController.IsInputEnabled.
     /// </summary>
@@ -20,6 +20,7 @@ namespace Game.Bootstrap
 
         private readonly IPublisher<PauseGameRequested> _pausePublisher;
         private readonly IPublisher<ResumeGameRequested> _resumePublisher;
+        private readonly IPublisher<VideoSkipRequested> _skipPublisher;
         private readonly ISubscriber<OptionsPanelStateChanged> _optionsStateSub;
         private readonly GameStateMachine _stateMachine;
         private readonly InputManager _inputManager;
@@ -31,6 +32,7 @@ namespace Game.Bootstrap
 
         private readonly List<IDisposable> _subscriptions = new(1);
         private bool _optionsOpen;
+        private bool _suppressEscapeUntilRelease;
         private bool _disposed;
 
         #endregion
@@ -43,6 +45,7 @@ namespace Game.Bootstrap
             GamePhaseController gamePhaseController,
             IPublisher<PauseGameRequested> pausePublisher,
             IPublisher<ResumeGameRequested> resumePublisher,
+            IPublisher<VideoSkipRequested> skipPublisher,
             ISubscriber<OptionsPanelStateChanged> optionsStateSub)
         {
             _stateMachine = stateMachine;
@@ -50,6 +53,7 @@ namespace Game.Bootstrap
             _phaseController = gamePhaseController;
             _pausePublisher = pausePublisher;
             _resumePublisher = resumePublisher;
+            _skipPublisher = skipPublisher;
             _optionsStateSub = optionsStateSub;
         }
 
@@ -59,7 +63,12 @@ namespace Game.Bootstrap
 
         void IStartable.Start()
         {
-            _subscriptions.Add(_optionsStateSub.Subscribe(msg => _optionsOpen = msg.IsOpen));
+            _subscriptions.Add(_optionsStateSub.Subscribe(msg =>
+            {
+                _optionsOpen = msg.IsOpen;
+                if (!msg.IsOpen)
+                    _suppressEscapeUntilRelease = true;
+            }));
         }
 
         public void Dispose()
@@ -79,9 +88,23 @@ namespace Game.Bootstrap
         void ITickable.Tick()
         {
             if (_disposed) return;
-            if (!_phaseController.IsInputEnabled) return;
             if (_optionsOpen) return;
+            if (_suppressEscapeUntilRelease)
+            {
+                if (!_inputManager.EscapeIsHeld)
+                    _suppressEscapeUntilRelease = false;
+                return;
+            }
             if (!_inputManager.EscapeWasPressed) return;
+
+            // Cinematic: Escape skips the cutscene (bypasses IsInputEnabled)
+            if (_phaseController.HasPhase(GamePhase.Cinematic))
+            {
+                _skipPublisher.Publish(VideoSkipRequested.Default);
+                return;
+            }
+
+            if (!_phaseController.IsInputEnabled) return;
 
             switch (_stateMachine.CurrentState)
             {

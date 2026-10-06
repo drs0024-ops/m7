@@ -24,12 +24,21 @@ namespace Game.Bootstrap
 
         private readonly List<IDisposable> _subscriptions = new();
 
+        public string LastCheckpoint { get; private set; } = "None observed";
+        public string LastSaveStatus { get; private set; } = "Waiting for save request";
+        public string LastSaveEvent { get; private set; } = "None";
+
         void IStartable.Start()
         {
             Trace<PlayerSpawned>();
             Trace<PlayerDied>();
             Trace<PlayerDamaged>();
             Trace<CheckpointReached>();
+            Trace<SaveRequest>();
+            Trace<SaveCompleted>();
+            Trace<SaveFailed>();
+            Trace<LoadCompleted>();
+            Trace<LoadFailed>();
             Trace<LevelCompleteSignal>();
             Trace<RestartLevelSignal>();
             Trace<LoadLevelSignal>();
@@ -42,8 +51,11 @@ namespace Game.Bootstrap
             Trace<UpgradePickedUp>();
             Trace<UpgradeStateChanged>();
             Trace<BombPlaced>();
-            Trace<InvisibilityToggleRequested>();
-            Trace<InvisibilityStateChanged>();
+            Trace<InvisibilityChargeChanged>();
+            Trace<InvisibilityBroadcastStarted>();
+            Trace<InvisibilityBroadcastStopped>();
+            Trace<InvisibilityInterrupted>();
+            Trace<InvisibilityTierChanged>();
         }
 
         private void Trace<T>() where T : struct
@@ -51,11 +63,53 @@ namespace Game.Bootstrap
             var sub = GlobalMessagePipe.GetSubscriber<T>();
             _subscriptions.Add(sub.Subscribe(msg =>
             {
-                string entry = $"[{Time.time:F3}] {typeof(T).Name}: {msg}";
-                _buffer[_head] = entry;
-                _head = (_head + 1) % BufferSize;
-                if (_count < BufferSize) _count++;
+                string details = FormatMessage(msg);
+                UpdateSaveState(msg);
+                AddEntry($"[{Time.time:F3}] {typeof(T).Name}: {details}");
             }));
+        }
+
+        private static string FormatMessage<T>(T message) where T : struct
+        {
+            if (message is CheckpointReached checkpoint)
+                return $"id={checkpoint.CheckpointId}, position={checkpoint.Position}";
+            if (message is SaveRequest request)
+                return $"source={request.Source}, immediate={request.Immediate}";
+            if (message is SaveFailed saveFailed)
+                return saveFailed.Error;
+            if (message is LoadFailed loadFailed)
+                return loadFailed.Error;
+
+            return message.ToString();
+        }
+
+        private void UpdateSaveState<T>(T message) where T : struct
+        {
+            switch (message)
+            {
+                case CheckpointReached checkpoint:
+                    LastCheckpoint = $"{checkpoint.CheckpointId} at {checkpoint.Position}";
+                    break;
+                case SaveRequest request:
+                    LastSaveStatus = request.Immediate ? "Saving immediately" : "Save queued (debounced)";
+                    LastSaveEvent = $"Requested by {request.Source} at {Time.time:F3}s";
+                    break;
+                case SaveCompleted:
+                    LastSaveStatus = "Saved successfully";
+                    LastSaveEvent = $"Completed at {Time.time:F3}s";
+                    break;
+                case SaveFailed saveFailed:
+                    LastSaveStatus = "Save failed";
+                    LastSaveEvent = saveFailed.Error;
+                    break;
+            }
+        }
+
+        private void AddEntry(string entry)
+        {
+            _buffer[_head] = entry;
+            _head = (_head + 1) % BufferSize;
+            if (_count < BufferSize) _count++;
         }
 
         /// <summary>
@@ -76,6 +130,9 @@ namespace Game.Bootstrap
             Array.Clear(_buffer, 0, BufferSize);
             _head = 0;
             _count = 0;
+            LastCheckpoint = "None observed";
+            LastSaveStatus = "Waiting for save request";
+            LastSaveEvent = "None";
         }
 
         public void Dispose()

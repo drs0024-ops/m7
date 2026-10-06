@@ -9,7 +9,7 @@ using VContainer;
 
 namespace Game.Gameplay.World
 {
-    public class CheckpointManager : MonoBehaviour, ISaveable, IDisposable
+    public class CheckpointManager : MonoBehaviour, ISaveable, ICheckpointProvider, IDisposable
     {
         private ISubscriber<CheckpointReached> _checkpointReachedSub;
         private IPublisher<SaveRequest> _saveRequestPublisher;
@@ -18,7 +18,7 @@ namespace Game.Gameplay.World
         private readonly List<IDisposable> _disposables = new();
         private ISaveableRegistry _registry;
 
-        [SerializeField] private ICheckpoint[] _checkpoints;
+        private IReadOnlyList<Checkpoint> _checkpoints;
         [SerializeField] private Transform _startSpawnPoint;
 
         private Vector3 _lastCheckpointPosition;
@@ -28,32 +28,33 @@ namespace Game.Gameplay.World
         public string SaveId => "CheckpointManager";
 
         [Inject]
-        public void Construct(
+        private void Inject(
             ISaveableRegistry registry,
             ISubscriber<CheckpointReached> checkpointReachedSub,
             IPublisher<SaveRequest> saveRequestPublisher,
-            IPublisher<PlayerSpawnRequest> playerSpawnRequestPublisher)
+            IPublisher<PlayerSpawnRequest> playerSpawnRequestPublisher,
+            IReadOnlyList<Checkpoint> checkpoints)
         {
             _registry = registry;
             _checkpointReachedSub = checkpointReachedSub;
             _saveRequestPublisher = saveRequestPublisher;
             _playerSpawnRequestPublisher = playerSpawnRequestPublisher;
+            _checkpoints = checkpoints;
+            _registry.Register(this);
         }
 
         private void Start()
         {
-            _registry.Register(this);
-
-            if (_checkpoints == null || _checkpoints.Length == 0)
+            if (_checkpoints == null || _checkpoints.Count == 0)
                 Debug.LogWarning("[CheckpointManager] No checkpoints found in scene.");
             else
             {
-                for (int i = 0; i < _checkpoints.Length; i++)
+                for (int i = 0; i < _checkpoints.Count; i++)
                     _checkpoints[i].ResetState();
 
                 if (!string.IsNullOrEmpty(_lastCheckpointId))
                 {
-                    for (int i = 0; i < _checkpoints.Length; i++)
+                    for (int i = 0; i < _checkpoints.Count; i++)
                     {
                         if (_checkpoints[i].GetId() == _lastCheckpointId)
                         {
@@ -123,7 +124,7 @@ namespace Game.Gameplay.World
             ICheckpoint checkpoint = null;
             if (_checkpoints != null)
             {
-                for (int i = 0; i < _checkpoints.Length; i++)
+                for (int i = 0; i < _checkpoints.Count; i++)
                 {
                     if (_checkpoints[i].GetId() == message.CheckpointId)
                     {
@@ -159,6 +160,7 @@ namespace Game.Gameplay.World
         {
             if (_disposed) return;
             _disposed = true;
+            _registry?.Unregister(this);
 
             for (int i = 0; i < _disposables.Count; i++)
                 _disposables[i]?.Dispose();

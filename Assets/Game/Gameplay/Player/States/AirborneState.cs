@@ -28,6 +28,9 @@ namespace Game.Gameplay.Player
             Ctx.IsFalling = false;
             Ctx.FastFallTime = 0f;
             Ctx.IsFastFalling = false;
+
+            if (Ctx.JumpBufferTimer > 0f)
+                AttemptJump();
         }
 
         protected override void OnFixedUpdate(float deltaTime)
@@ -39,6 +42,7 @@ namespace Game.Gameplay.Player
             else
                 Ctx.Velocity.y += Ctx.MoveStats.Gravity * deltaTime;
 
+            Ctx.Move(Ctx.MoveStats.AirAcceleration, Ctx.MoveStats.AirDeceleration, Ctx.MoveInput, deltaTime);
             ClampVelocity();
         }
 

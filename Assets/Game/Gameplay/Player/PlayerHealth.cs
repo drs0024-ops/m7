@@ -5,10 +5,11 @@ using Game.Core;
 using Game.Core.Interfaces;
 using MessagePipe;
 using Game.Core.Messages;
+using Game.Gameplay.Upgrades;
 
 namespace Game.Gameplay.Player
 {
-    public class PlayerHealth : MonoBehaviour, IDamagable, ISaveable, IStartable
+    public class PlayerHealth : MonoBehaviour, IDamagable, ISaveable, IStartable, IPlayerHealth
     {
         [Inject] private ISaveableRegistry _registry;
         private HealthModel _model;
@@ -30,10 +31,13 @@ namespace Game.Gameplay.Player
             IPublisher<PlayerDied> diedPub,
             IPublisher<EntityHealthChanged> healthChangedPub,
             IInputState input,
-            LevelStateSnapshot snapshot)
+            LevelStateSnapshot snapshot,
+            IPublisher<InvisibilityInterrupted> invisibilityInterruptedPublisher,
+            InvisibilityTuning invisibilityTuning)
         {
             _registry = registry;
-            _model = new HealthModel(damagedPub, diedPub, healthChangedPub, input, snapshot);
+            _model = new HealthModel(damagedPub, diedPub, healthChangedPub, input, snapshot,
+                invisibilityInterruptedPublisher, invisibilityTuning);
             _model.SetTransform(transform);
         }
 

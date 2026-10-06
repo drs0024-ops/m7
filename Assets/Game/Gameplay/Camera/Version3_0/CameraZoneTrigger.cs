@@ -38,6 +38,16 @@ namespace Game.Gameplay.Camera
         private void OnTriggerEnter2D(Collider2D other)
         {
             if (!IsPlayer(other)) return;
+            if (_switchData == null)
+            {
+                Debug.LogError($"[CameraZoneTrigger] Switch data is not assigned on '{name}'.", this);
+                return;
+            }
+            if (_switchPublisher == null)
+            {
+                Debug.LogError($"[CameraZoneTrigger] CameraSwitchRequest publisher was not injected on '{name}'.", this);
+                return;
+            }
 
             float dir = other.attachedRigidbody?.linearVelocity.x ?? 1f;
             if (Mathf.Approximately(dir, 0f)) dir = 1f;
