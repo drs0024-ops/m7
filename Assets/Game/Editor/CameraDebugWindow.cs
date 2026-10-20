@@ -22,6 +22,9 @@ namespace Game.Editor
         private string _confinerBounds = "—";
         private Vector3 _damping = Vector3.zero;
         private bool _impulseActive;
+        private Vector2 _currentPanOffset;
+        private Vector2 _panTargetOffset;
+        private float _panDuration = 0.35f;
 
         #endregion
 
@@ -68,7 +71,10 @@ namespace Game.Editor
 
                 var composer = cam.GetComponent<CinemachinePositionComposer>();
                 if (composer != null)
+                {
                     _damping = composer.Damping;
+                    _currentPanOffset = composer.TargetOffset;
+                }
 
                 var confiner = cam.GetComponent<CinemachineConfiner2D>();
                 if (confiner != null && confiner.BoundingShape2D != null)
@@ -100,6 +106,7 @@ namespace Game.Editor
             EditorGUILayout.LabelField("Active vCam", _activeCamName);
             EditorGUILayout.LabelField("Confiner Bounds", _confinerBounds);
             EditorGUILayout.LabelField("Damping (X,Y,Z)", $"{_damping.x:F3}, {_damping.y:F3}, {_damping.z:F3}");
+            EditorGUILayout.LabelField("Pan Offset", $"{_currentPanOffset.x:F2}, {_currentPanOffset.y:F2}");
             EditorGUILayout.LabelField("Impulse Active", _impulseActive ? "Yes" : "No");
 
             EditorGUILayout.Space();
@@ -116,6 +123,23 @@ namespace Game.Editor
             }
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Pan", EditorStyles.boldLabel);
+            EditorGUI.BeginDisabledGroup(!Application.isPlaying);
+            _panTargetOffset = EditorGUILayout.Vector2Field("Target Offset", _panTargetOffset);
+            _panDuration = EditorGUILayout.FloatField("Duration", _panDuration);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Pan"))
+                    RequestPan(_panTargetOffset);
+                if (GUILayout.Button("Reset Pan"))
+                {
+                    _panTargetOffset = Vector2.zero;
+                    RequestPan(Vector2.zero);
+                }
+            }
+            EditorGUI.EndDisabledGroup();
+
+            EditorGUILayout.Space();
             if (GUILayout.Button("Reset Bounds"))
             {
                 var publisher = GlobalMessagePipe.GetPublisher<CameraBoundsResetRequest>();
@@ -127,6 +151,12 @@ namespace Game.Editor
         {
             var publisher = GlobalMessagePipe.GetPublisher<CameraSwitchRequest>();
             publisher.Publish(new CameraSwitchRequest(mode));
+        }
+
+        private void RequestPan(Vector2 targetOffset)
+        {
+            var publisher = GlobalMessagePipe.GetPublisher<CameraPanRequest>();
+            publisher.Publish(new CameraPanRequest(targetOffset, Mathf.Max(0.01f, _panDuration)));
         }
 
         private static CameraMode InferModeFromName(string name)

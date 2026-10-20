@@ -1,8 +1,8 @@
-using System;
 using System.Collections;
 using UnityEngine;
 using Game.Core.Interfaces;
 using System.Collections.Generic;
+using System;
 
 namespace Game.Gameplay.Player
 {
@@ -57,12 +57,12 @@ namespace Game.Gameplay.Player
 
         private void Attack()
         {
-            var hits = Physics2D.CircleCastAll(
-                _attackTransform.position, _attackRange, transform.right, 0f, _attackableLayer);
+            var hits = Physics2D.OverlapCircleAll(
+                _attackTransform.position, _attackRange, _attackableLayer);
 
             for (int i = 0; i < hits.Length; i++)
             {
-                var target = hits[i].collider.gameObject.GetComponentInParent<IDamagable>();
+                var target = hits[i].GetComponentInParent<IDamagable>();
                 if (target != null)
                     target.Damage(_damageAmount, transform.right);
             }
@@ -74,12 +74,12 @@ namespace Game.Gameplay.Player
 
             while (ShouldBeDamaging)
             {
-                var hits = Physics2D.CircleCastAll(
-                    _attackTransform.position, _attackRange, transform.right, 0f, _attackableLayer);
+                var hits = Physics2D.OverlapCircleAll(
+                    _attackTransform.position, _attackRange, _attackableLayer);
 
                 for (int i = 0; i < hits.Length; i++)
                 {
-                    var target = hits[i].collider.gameObject.GetComponentInParent<IDamagable>();
+                    var target = hits[i].GetComponentInParent<IDamagable>();
                     if (target != null && _damagedThisSlash.Add(target))
                         target.Damage(_damageAmount, transform.right);
                 }

@@ -62,10 +62,6 @@ namespace Game.Bootstrap.Scopes
             ConfigureEntryPoints(builder);
             ConfigureBuildCallbacks(builder);
             ConfigureOrbCounter(builder);
-
-#if UNITY_EDITOR
-            builder.RegisterComponentInHierarchy<SceneViewDriverDisabler>();
-#endif
         }
 
         private void ConfigureOrbCounter(IContainerBuilder builder)
@@ -189,6 +185,21 @@ namespace Game.Bootstrap.Scopes
 
         private void ConfigureCamera(IContainerBuilder builder)
         {
+            if (_sceneCameraSetup == null)
+                _sceneCameraSetup = GetComponentInChildren<SceneCameraSetup>(true);
+            if (_cameraFollowObject == null)
+                _cameraFollowObject = GetComponentInChildren<CameraFollowObject>(true);
+            if (_cameraConfig == null)
+                _cameraConfig = GetComponentInChildren<CameraConfig>(true);
+            if (_impulseSource == null)
+                _impulseSource = GetComponentInChildren<CinemachineImpulseSource>(true);
+            if (_cameraTargetManager == null)
+                _cameraTargetManager = GetComponentInChildren<CameraTargetManager>(true);
+
+            if (_sceneCameraSetup == null || _cameraFollowObject == null)
+                throw new InvalidOperationException(
+                    $"[FacilitySceneScope] Camera setup or follow object not found under '{gameObject.name}'.");
+
             builder.RegisterComponent(_sceneCameraSetup);
             builder.RegisterComponent(_cameraFollowObject);
 

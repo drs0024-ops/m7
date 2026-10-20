@@ -235,6 +235,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: UI::Game.UI.BootTextController
   _freshBootTitle: 'SYSTEM BOOT: CONCIENCENESS TRANSFER SUCCESSFUL'
   _returnBootTitle: 'SYSTEM BOOT: NORMAL'
+  _saveDetectedTitle: 'SYSTEM BOOT: SAVE DETECTED'
   _titleText: {fileID: 7235801710049435820}
   _lineTexts:
   - {fileID: 9124240178183973307}
@@ -335,7 +336,7 @@ MonoBehaviour:
   _crtImage: {fileID: 248097111504494203}
   _blackOverlay: {fileID: 0}
   _duration: 1
-  _postDelay: 0.4
+  _postDelay: 0.2
 --- !u!1 &5518976303903490833
 GameObject:
   m_ObjectHideFlags: 0

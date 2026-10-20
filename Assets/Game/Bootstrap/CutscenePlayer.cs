@@ -165,6 +165,7 @@ namespace Game.Bootstrap
                 _skipSubscription = _skipSub.Subscribe(_ => tcs.TrySetResult());
 
             _videoPlayer.Play();
+            WatchForClipEndAsync(clip, tcs, _cts.Token).Forget();
 
             try
             {
@@ -181,7 +182,8 @@ namespace Game.Bootstrap
                 {
                     Debug.LogError(
                         $"[CutscenePlayer] Timed out waiting for '{clip.name}' " +
-                        $"(prepared={_videoPlayer.isPrepared}, playing={_videoPlayer.isPlaying}, " +
+                        $"(length={clip.length:F1}, frames={clip.frameCount}, " +
+                        $"prepared={_videoPlayer.isPrepared}, playing={_videoPlayer.isPlaying}, " +
                         $"time={_videoPlayer.time:F1}, frame={_videoPlayer.frame}).", this);
                 }
             }
@@ -208,6 +210,40 @@ namespace Game.Bootstrap
                 _audioRestorePublisher.Publish(new CutsceneAudioRestore(0.4f));
             }
         }   
+
+        private async UniTask WatchForClipEndAsync(
+            VideoClip clip,
+            UniTaskCompletionSource completion,
+            CancellationToken cancellationToken)
+        {
+            long lastFrame = clip.frameCount > 0 ? (long)clip.frameCount - 1L : -1L;
+            double endTime = Math.Max(0d, clip.length - 0.05d);
+            bool playbackStarted = false;
+
+            try
+            {
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    if (_videoPlayer == null) return;
+
+                    long frame = _videoPlayer.frame;
+                    double time = _videoPlayer.time;
+                    playbackStarted |= _videoPlayer.isPlaying || frame >= 0 || time > 0d;
+
+                    if (playbackStarted &&
+                        ((clip.length > 0d && time >= endTime) || (lastFrame >= 0 && frame >= lastFrame)))
+                    {
+                        completion.TrySetResult();
+                        return;
+                    }
+
+                    await UniTask.DelayFrame(1, cancellationToken: cancellationToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
 
         #endregion
 

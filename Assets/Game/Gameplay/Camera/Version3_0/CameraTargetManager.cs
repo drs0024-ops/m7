@@ -35,6 +35,7 @@ namespace Game.Gameplay.Camera
 
         private CinemachineVirtualCameraBase _activeVcam;
         private Transform _currentTarget;
+        private Transform _followObject;
         private bool _initialized;
 
         private IDisposable _targetSubscription;
@@ -93,7 +94,8 @@ namespace Game.Gameplay.Camera
 
         private void OnPlayerSpawned(PlayerSpawned msg)
         {
-            SetTarget(msg.Player);
+            // The follow object already mirrors the player; targeting the player directly bypasses it.
+            SetTarget(_followObject != null ? _followObject : msg.Player);
         }
 
         private void OnPlayerDied()
@@ -104,7 +106,23 @@ namespace Game.Gameplay.Camera
         // STUB: Wire up actual target update logic when implemented.
         private void OnTargetUpdate(CameraTargetUpdate msg)
         {
+            _followObject = msg.FollowTarget;
             SetTarget(msg.FollowTarget);
+            ApplyBoundary(msg.Boundary);
+        }
+
+        private void ApplyBoundary(Collider2D boundary)
+        {
+            if (boundary == null || _config == null || _config.rigs == null) return;
+
+            for (int i = 0; i < _config.rigs.Count; i++)
+            {
+                var confiner = _config.rigs[i].confiner;
+                if (confiner == null) continue;
+
+                confiner.BoundingShape2D = boundary;
+                confiner.InvalidateBoundingShapeCache();
+            }
         }
 
         // STUB: Wire up actual bounds reset logic when implemented.

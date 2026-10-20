@@ -7,10 +7,10 @@ using VContainer;
 namespace Game.Gameplay.Camera
 {
     /// <summary>
-    /// Editor-only component that disables the runtime camera system
-    /// and drives the local Camera from either a track object or the Scene View.
-    /// Used for visual parallax authoring.
+    /// Editor-only camera driver for visual parallax authoring. Its runtime guard
+    /// disables the complete editor-camera rig if it is present in a play scene.
     /// </summary>
+    [ExecuteAlways]
     [RequireComponent(typeof(UnityEngine.Camera))]
     public class SceneViewDriverDisabler : MonoBehaviour
     {
@@ -52,8 +52,35 @@ namespace Game.Gameplay.Camera
 
         private void Awake()
         {
+            if (Application.isPlaying)
+            {
+                Transform rigRoot = transform.parent != null ? transform.parent : transform;
+                Debug.LogWarning(
+                    $"[SceneViewDriverDisabler] Editor camera rig '{rigRoot.name}' found in Play Mode; disabling it.",
+                    rigRoot.gameObject);
+                rigRoot.gameObject.SetActive(false);
+                return;
+            }
+
             _unityCamera = GetComponent<UnityEngine.Camera>();
             _unityCamera.depth = -1;
+        }
+
+        private void OnEnable()
+        {
+            EditorApplication.playModeStateChanged += OnPlayModeChanged;
+        }
+
+        private void OnDisable()
+        {
+            EditorApplication.playModeStateChanged -= OnPlayModeChanged;
+        }
+
+        // Brain/vcams disabled while driving would otherwise be serialized into the play session.
+        private void OnPlayModeChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingEditMode && _isDriving)
+                RestoreState();
         }
 
         private void LateUpdate()

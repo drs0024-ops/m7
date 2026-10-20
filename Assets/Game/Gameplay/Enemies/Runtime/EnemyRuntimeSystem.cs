@@ -21,6 +21,32 @@ namespace Game.Gameplay.Enemies.Runtime
 
         public int ActiveContextCount => _contexts.Count;
 
+        public bool TryGetCurrentHealth(EnemyInstanceId instanceId, out float currentHealth)
+        {
+            if (_contexts.TryGetValue(instanceId, out EnemyRuntimeContext context))
+            {
+                currentHealth = context.CurrentHealth;
+                return true;
+            }
+
+            currentHealth = 0f;
+            return false;
+        }
+
+        public bool ApplyDamage(EnemyInstanceId instanceId, float amount)
+        {
+            if (_disposed || !_contexts.TryGetValue(instanceId, out EnemyRuntimeContext context) || context.IsDead)
+                return false;
+
+            return context.ApplyDamage(amount);
+        }
+
+        public bool Kill(EnemyInstanceId instanceId)
+        {
+            return _contexts.TryGetValue(instanceId, out EnemyRuntimeContext context)
+                && ApplyDamage(instanceId, context.CurrentHealth);
+        }
+
         public EnemyRuntimeSystem(
             IReadOnlyList<EnemyEntity> entities,
             IReadOnlyList<EnemyPerceptionSensor> sensors,

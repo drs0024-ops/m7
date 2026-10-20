@@ -147,6 +147,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 497070991232833624, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: orthographic size
+      value: 10
+      objectReference: {fileID: 0}
     - target: {fileID: 563971269707917734, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -173,6 +177,26 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 721329115652375117, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
       propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1169869585729137313, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: m_ClearFlags
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1169869585729137313, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: orthographic size
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1169869585729137313, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: m_BackGroundColor.b
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1169869585729137313, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: m_BackGroundColor.g
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1169869585729137313, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
+      propertyPath: m_BackGroundColor.r
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1549826695979927238, guid: cc0cd55119a8c4da580dfd80c7fbf95d, type: 3}
